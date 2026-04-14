@@ -1,0 +1,55 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── ZytekOS Design System ── */
+:root {
+  --bg:        #0d0d0f;
+  --surface:   #16161a;
+  --surface2:  #1e1e24;
+  --surface3:  #1e2640;
+  --topbar:    #111114;
+  --border:    rgba(255,255,255,0.08);
+  --border2:   rgba(255,255,255,0.14);
+  --text:      #f0f0f5;
+  --text-mid:  #b0b0c0;
+  --text-dim:  #606070;
+  --orange:    #ff7c20;
+  --green:     #2ee87a;
+  --red:       #ff4757;
+  --blue:      #38b6ff;
+  --amber:     #ffc040;
+  --purple:    #a855f7;
+  --cyan:      #00d4ff;
+}
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--text); }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+
+/* ── Shared component classes ── */
+@layer components {
+  .btn        { @apply px-4 py-2 rounded-lg font-semibold text-sm cursor-pointer transition-all border-none; }
+  .btn-primary { @apply bg-orange text-white hover:opacity-90; }
+  .btn-ghost  { @apply bg-transparent text-[var(--text-mid)] border border-[var(--border)] hover:border-orange hover:text-orange; }
+  .btn-red    { @apply bg-[rgba(255,71,87,0.12)] text-red border border-[rgba(255,71,87,0.25)]; }
+  .btn-sm     { @apply px-3 py-1 text-xs; }
+
+  .card       { @apply bg-surface border border-[var(--border)] rounded-[10px] overflow-hidden; }
+  .card-head  { @apply flex items-center justify-between px-4 py-3 border-b border-[var(--border)]; }
+  .card-title { @apply text-sm font-bold text-text; }
+  
+  .badge      { @apply inline-flex items-center font-mono text-xs px-2 py-0.5 rounded-md; }
+  .b-green    { @apply bg-[rgba(46,232,122,0.1)] text-green border border-[rgba(46,232,122,0.25)]; }
+  .b-amber    { @apply bg-[rgba(255,192,64,0.1)] text-amber border border-[rgba(255,192,64,0.25)]; }
+  .b-red      { @apply bg-[rgba(255,71,87,0.12)] text-red border border-[rgba(255,71,87,0.25)]; }
+  .b-blue     { @apply bg-[rgba(56,182,255,0.1)] text-blue border border-[rgba(56,182,255,0.25)]; }
+  
+  .finput     { @apply bg-surface2 border border-[var(--border)] rounded-md px-3 py-2 text-text text-sm outline-none w-full focus:border-orange transition-colors; }
+  .fselect    { @apply bg-surface2 border border-[var(--border)] rounded-md px-3 py-2 text-text text-sm outline-none w-full; }
+  .flabel     { @apply text-xs font-mono tracking-widest text-[var(--text-dim)] uppercase; }
+}

@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>ZytekOS — KDS</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500;700&family=Fraunces:wght@700;900&family=DM+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+[data-theme="dark"]{
+  --bg:#060b09;--surface:#0c1410;--surface2:#101a12;--surface3:#14201a;
+  --border:#1c2e20;--border2:#254030;
+  --text:#d0ead4;--text-dim:#2a4a2e;--text-mid:#507858;
+}
+[data-theme="light"]{
+  --bg:#eaf4eb;--surface:#fff;--surface2:#f0faf1;--surface3:#e4f5e6;
+  --border:#c0dcc5;--border2:#a8ceae;
+  --text:#081a0a;--text-dim:#70a878;--text-mid:#3a6040;
+}
+/* ZytekOS v2: CSS tokens managed by zytek-core.js
+:root{
+  --pending:#ff8c00;--pending-dim:rgba(255,140,0,.12);--pending-b:rgba(255,140,0,.4);
+  --cooking:#38b6ff;--cooking-dim:rgba(56,182,255,.11);--cooking-b:rgba(56,182,255,.4);
+  --ready:#2ee87a;--ready-dim:rgba(46,232,122,.11);--ready-b:rgba(46,232,122,.45);
+  --late:#ff3b4e;--late-dim:rgba(255,59,78,.14);--late-b:rgba(255,59,78,.5);
+  --green:#2ee87a;--amber:#ffc040;--red:#ff3b4e;--blue:#38b6ff;--orange:#ff7c20;
+}
+*/
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;overflow:hidden;display:flex;flex-direction:column}
+
+/* TOPBAR */
+.topbar{height:52px;background:var(--surface);border-bottom:2px solid var(--border);
+  display:flex;align-items:center;padding:0 16px;gap:12px;flex-shrink:0}
+.brand{display:flex;align-items:center;gap:8px;padding-right:14px;border-right:1px solid var(--border)}
+.brand-icon{font-size:20px}
+.brand-name{font-family:'Fraunces',serif;font-size:15px;font-weight:700;color:var(--text)}
+.brand-sub{font-size:8px;font-family:'DM Mono',monospace;color:var(--text-dim);letter-spacing:2px}
+.kpi-bar{display:flex;align-items:center;gap:8px;flex:1}
+.kpi{display:flex;align-items:center;gap:5px;background:var(--surface2);border:1px solid var(--border);
+  border-radius:20px;padding:4px 10px;font-family:'DM Mono',monospace;font-size:11px;color:var(--text-mid)}
+.kpi-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.kpi b{font-size:13px;font-weight:700;color:var(--text)}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.clock{font-family:'DM Mono',monospace;font-size:17px;font-weight:700;color:var(--text);letter-spacing:1px}
+.tbtn{height:30px;padding:0 10px;border-radius:6px;border:1px solid var(--border);background:transparent;
+  color:var(--text-mid);cursor:pointer;font-size:12px;font-family:'DM Sans',sans-serif;font-weight:600;
+  display:flex;align-items:center;gap:5px;transition:all .13s;white-space:nowrap}
+.tbtn:hover{border-color:var(--green);color:var(--green)}
+.tbtn.active{background:var(--ready-dim);border-color:var(--ready-b);color:var(--green)}
+
+/* STATION TABS */
+.station-bar{height:38px;background:var(--surface);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;padding:0 12px;gap:6px;flex-shrink:0;overflow-x:auto}
+.stab{height:26px;padding:0 12px;border-radius:5px;border:1px solid var(--border);
+  background:transparent;color:var(--text-mid);cursor:pointer;font-size:11px;
+  font-family:'DM Mono',monospace;letter-spacing:1px;transition:all .13s;white-space:nowrap;
+  display:flex;align-items:center;gap:5px}
+.stab:hover{background:var(--surface2);color:var(--text)}
+.stab.active{background:var(--surface3);border-color:var(--border2);color:var(--text)}
+.stab-count{font-size:11px;font-weight:700;background:var(--pending-dim);color:var(--pending);
+  border-radius:10px;padding:0 5px;min-width:18px;text-align:center}
+
+/* COL HEADERS */
+.col-headers{display:grid;height:34px;background:var(--surface2);border-bottom:1px solid var(--border);flex-shrink:0}
+.col-hdr{display:flex;align-items:center;justify-content:center;gap:6px;
+  font-family:'DM Mono',monospace;font-size:10px;letter-spacing:2px;text-transform:uppercase;
+  border-right:1px solid var(--border);color:var(--text-mid)}
+.col-hdr:last-child{border-right:none}
+.col-hdr-dot{width:7px;height:7px;border-radius:50%}
+.col-hdr-n{font-size:12px;font-weight:700;color:var(--text)}
+
+/* BOARD */
+.board{display:grid;flex:1;min-height:0;overflow:hidden}
+.col{border-right:1px solid var(--border);overflow-y:auto;padding:8px;
+  display:flex;flex-direction:column;gap:7px;
+  scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.15) transparent}
+.col:last-child{border-right:none}
+.col::-webkit-scrollbar{width:4px}
+.col::-webkit-scrollbar-thumb{background:rgba(255,255,255,.15);border-radius:2px}
+
+/* ORDER CARD */
+.order-card{border-radius:9px;padding:10px 11px;border:2px solid;position:relative;
+  transition:transform .13s,box-shadow .13s;cursor:pointer;flex-shrink:0}
+.order-card:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.4)}
+.order-card:active{transform:scale(.97)}
+.card-pending{background:var(--pending-dim);border-color:var(--pending-b)}
+.card-cooking{background:var(--cooking-dim);border-color:var(--cooking-b)}
+.card-ready{background:var(--ready-dim);border-color:var(--ready-b)}
+.card-late{background:var(--late-dim);border-color:var(--late-b);animation:latePulse 2s ease-in-out infinite}
+@keyframes latePulse{0%,100%{box-shadow:0 0 0 0 rgba(255,59,78,0)}50%{box-shadow:0 0 0 6px rgba(255,59,78,.2)}}
+@keyframes cardIn{from{opacity:0;transform:translateY(-8px) scale(.97)}to{opacity:1;transform:none}}
+.card-new{animation:cardIn .3s ease-out}
+
+/* CARD PARTS */
+.card-head{display:flex;align-items:center;gap:6px;margin-bottom:7px}
+.card-mesa{font-family:'Fraunces',serif;font-size:17px;font-weight:900;color:var(--text);line-height:1}
+.card-mesero{font-size:10px;color:var(--text-mid);font-family:'DM Mono',monospace;flex:1}
+.card-timer{font-family:'DM Mono',monospace;font-size:10px;font-weight:700;
+  padding:2px 6px;border-radius:4px;flex-shrink:0}
+.timer-ok{background:var(--ready-dim);color:var(--green);border:1px solid var(--ready-b)}
+.timer-warn{background:rgba(255,192,64,.12);color:var(--amber);border:1px solid rgba(255,192,64,.35)}
+.timer-late{background:var(--late-dim);color:var(--red);border:1px solid var(--late-b)}
+.card-station-badge{font-size:8px;font-family:'DM Mono',monospace;letter-spacing:1px;
+  padding:1px 5px;border-radius:3px;background:var(--surface3);color:var(--text-mid);
+  border:1px solid var(--border2);text-transform:uppercase;flex-shrink:0}
+
+/* DISH ROWS */
+.dish-list{display:flex;flex-direction:column;gap:1px}
+.dish-row{display:flex;align-items:flex-start;gap:7px;padding:4px 0;
+  border-bottom:1px solid rgba(255,255,255,.04)}
+.dish-row:last-child{border-bottom:none}
+.dish-row.done .dish-name{text-decoration:line-through;opacity:.45}
+.dish-row.done .dish-qty{opacity:.35}
+.dish-check{width:18px;height:18px;border-radius:4px;border:1px solid rgba(255,255,255,.15);
+  display:flex;align-items:center;justify-content:center;font-size:10px;cursor:pointer;
+  flex-shrink:0;margin-top:1px;transition:all .15s;background:rgba(255,255,255,.04)}
+.dish-check:hover{border-color:var(--green);background:var(--ready-dim)}
+.dish-check.done{background:var(--ready-dim);border-color:var(--ready-b);color:var(--green)}
+.dish-qty{font-family:'DM Mono',monospace;font-size:12px;font-weight:700;
+  color:var(--text);min-width:18px;text-align:center;flex-shrink:0}
+.dish-name{font-size:12px;color:var(--text);flex:1;line-height:1.35}
+.dish-mods{font-size:10px;color:var(--text-mid);margin-top:2px;line-height:1.3}
+.dish-nota{font-size:10px;color:var(--amber);margin-top:2px;font-style:italic}
+
+/* CARD FOOTER */
+.card-foot{display:flex;align-items:center;justify-content:space-between;
+  margin-top:8px;padding-top:7px;border-top:1px solid rgba(255,255,255,.06)}
+.card-items-left{font-size:9px;font-family:'DM Mono',monospace;color:var(--text-mid)}
+.card-foot-btns{display:flex;gap:5px}
+.cbtn{height:24px;padding:0 8px;border-radius:5px;border:1px solid;cursor:pointer;
+  font-size:10px;font-family:'DM Sans',sans-serif;font-weight:700;letter-spacing:.3px;
+  transition:all .13s;display:flex;align-items:center;gap:4px}
+.cbtn-bump{background:var(--ready-dim);border-color:var(--ready-b);color:var(--green)}
+.cbtn-bump:hover{background:var(--green);color:#000}
+.cbtn-recall{background:var(--surface2);border-color:var(--border2);color:var(--text-mid)}
+.cbtn-recall:hover{border-color:var(--amber);color:var(--amber)}
+.cbtn-void{background:transparent;border-color:rgba(255,59,78,.3);color:rgba(255,59,78,.6)}
+.cbtn-void:hover{border-color:var(--red);color:var(--red)}
+
+/* EMPTY COL */
+.col-empty{display:flex;align-items:center;justify-content:center;flex:1;
+  flex-direction:column;gap:6px;color:var(--text-dim);font-family:'DM Mono',monospace;
+  font-size:10px;letter-spacing:1px;text-align:center;padding:20px}
+.col-empty-icon{font-size:28px;opacity:.3}
+
+/* ALERT BANNER */
+.alert-bar{position:fixed;top:52px;left:0;right:0;z-index:200;pointer-events:none}
+.alert-item{display:flex;align-items:center;gap:10px;padding:8px 16px;
+  background:var(--late-dim);border-bottom:2px solid var(--late-b);
+  font-size:12px;font-family:'DM Mono',monospace;color:var(--red);
+  animation:slideDown .3s ease-out;pointer-events:auto}
+@keyframes slideDown{from{transform:translateY(-100%)}to{transform:none}}
+
+/* BUMP FLASH */
+@keyframes bumpFlash{0%{opacity:1}50%{opacity:0}100%{opacity:1}}
+.bumping{animation:bumpFlash .4s ease-in-out 2}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.8);
+  display:none;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border2);border-radius:12px;
+  padding:20px;min-width:320px;max-width:480px}
+.modal-title{font-family:'Fraunces',serif;font-size:16px;font-weight:700;
+  color:var(--text);margin-bottom:12px}
+.modal-btns{display:flex;gap:8px;margin-top:16px;justify-content:flex-end}
+
+/* SCROLLBAR GLOBAL */
+*{scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.15) transparent}
+
+/* ── KDS TOUCH ── */
+.is-touch .card { min-height: 180px !important; }
+.is-touch .bump-btn { min-height: 52px !important; font-size: 14px !important; }
+.is-touch * { -webkit-user-select: none; user-select: none; }
+
+</style>
+<script src="zytek-core.js"></script>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-icon">📺</div>
+    <div><div class="brand-name">KDS</div><div class="brand-sub">COCINA</div></div>
+  </div>
+  <div class="kpi-bar">
+    <div class="kpi"><div class="kpi-dot" style="background:var(--pending)"></div>Pendiente <b id="kpi-pending">0</b></div>
+    <div class="kpi"><div class="kpi-dot" style="background:var(--cooking)"></div>En cocina <b id="kpi-cooking">0</b></div>
+    <div class="kpi"><div class="kpi-dot" style="background:var(--ready)"></div>Listo <b id="kpi-ready">0</b></div>
+    <div class="kpi"><div class="kpi-dot" style="background:var(--late)"></div>Tardío <b id="kpi-late">0</b></div>
+    <div class="kpi" style="margin-left:8px">⏱ Prom <b id="kpi-avg">—</b></div>
+  </div>
+  <div class="topbar-right">
+    <div class="clock" id="clock">00:00:00</div>
+    <button class="tbtn" id="btn-sound" onclick="toggleSound()" title="Sonido">🔔 Sonido</button>
+    <button class="tbtn" onclick="addDemoOrder()" title="Simular nueva orden">+ Demo</button>
+    <button class="tbtn" onclick="toggleRecalled()" id="btn-recall" title="Ver bumpeados">🔁 Bumpeados</button>
+    <button class="tbtn" onclick="toggleTheme()">☀️</button>
+  </div>
+</div>
+
+<!-- STATION TABS -->
+<div class="station-bar" id="station-bar">
+  <button class="stab active" data-station="all" onclick="selectStation('all',this)">
+    📺 Todo <span class="stab-count" id="cnt-all">0</span>
+  </button>
+  <button class="stab" data-station="cocina" onclick="selectStation('cocina',this)">
+    🔥 Cocina <span class="stab-count" id="cnt-cocina">0</span>
+  </button>
+  <button class="stab" data-station="horno" onclick="selectStation('horno',this)">
+    🍕 Pizzas <span class="stab-count" id="cnt-horno">0</span>
+  </button>
+  <button class="stab" data-station="barra" onclick="selectStation('barra',this)">
+    🍹 Barra <span class="stab-count" id="cnt-barra">0</span>
+  </button>
+</div>
+
+<!-- COL HEADERS -->
+<div class="col-headers" id="col-headers" style="grid-template-columns:repeat(4,1fr)">
+  <div class="col-hdr"><div class="col-hdr-dot" style="background:var(--pending)"></div>Pendiente<span class="col-hdr-n" id="ch-pending">0</span></div>
+  <div class="col-hdr"><div class="col-hdr-dot" style="background:var(--cooking)"></div>En cocina<span class="col-hdr-n" id="ch-cooking">0</span></div>
+  <div class="col-hdr"><div class="col-hdr-dot" style="background:var(--ready)"></div>Listo<span class="col-hdr-n" id="ch-ready">0</span></div>
+  <div class="col-hdr"><div class="col-hdr-dot" style="background:var(--late)"></div>Tardío<span class="col-hdr-n" id="ch-late">0</span></div>
+</div>
+
+<!-- BOARD -->
+<div class="board" id="board" style="grid-template-columns:repeat(4,1fr)">
+  <div class="col" id="col-pending"></div>
+  <div class="col" id="col-cooking"></div>
+  <div class="col" id="col-ready"></div>
+  <div class="col" id="col-late"></div>
+</div>
+
+<!-- SOUND UNLOCK OVERLAY -->
+<div id="sound-unlock" style="position:fixed;inset:0;z-index:900;background:rgba(0,0,0,.85);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;cursor:pointer"
+  onclick="unlockAudio()">
+  <div style="font-size:52px">🔔</div>
+  <div style="font-family:'Fraunces',serif;font-size:22px;font-weight:700;color:#d0ead4">
+    Toca para activar el sonido
+  </div>
+  <div style="font-size:12px;font-family:'DM Mono',monospace;color:#507858;letter-spacing:1px">
+    KDS · ZytekOS · Cocina
+  </div>
+  <div style="margin-top:8px;padding:10px 28px;border-radius:8px;background:rgba(46,232,122,.15);
+    border:1px solid rgba(46,232,122,.4);color:#2ee87a;font-size:13px;font-weight:700">
+    Toca en cualquier lugar para continuar
+  </div>
+</div>
+<div class="alert-bar" id="alert-bar"></div>
+
+<!-- RECALL MODAL -->
+<div class="modal-overlay" id="modal-recall">
+  <div class="modal" style="max-width:560px;width:90%">
+    <div class="modal-title">🔁 Órdenes Bumpeadas</div>
+    <div id="recall-list" style="display:flex;flex-direction:column;gap:8px;max-height:60vh;overflow-y:auto"></div>
+    <div class="modal-btns">
+      <button class="cbtn cbtn-recall" onclick="closeRecall()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+if('ontouchstart' in window || navigator.maxTouchPoints > 0) document.documentElement.classList.add('is-touch');
+
+(async () => { // ZytekOS async license init
+// ════════════════════════════════════════════════════════════════
+//  ZYTEK OS v2.0 — CORE INTEGRATION
+//  Módulo: kds
+// ════════════════════════════════════════════════════════════════
+
+// Detectar contexto de ejecución
+const _URL_PARAMS   = new URLSearchParams(window.location.search);
+const _FROM_SHELL   = _URL_PARAMS.get('fromShell') === '1';
+const _FROM_NEXT    = _URL_PARAMS.get('fromNext')  === '1';  // corriendo en Next.js iframe
+const _TENANT_NAME  = _URL_PARAMS.get('tenant') || 'Demo';
+const _TENANT_PLAN  = _URL_PARAMS.get('plan')   || 'pro';
+
+// Si viene de Next.js, la licencia ya fue validada por LicenseGate
+// Saltar la LicenseWall para no bloquear la pantalla de PIN
+const _Core = await ZytekCore.init('kds', {
+  skipLicense: _FROM_NEXT || _FROM_SHELL
+});
+const _Bus  = _Core.EventBus;
+const _IDB  = _Core.IDB;
+const _Sync = _Core.SyncService;
+const _Reg  = _Core.ModuleRegistry;
+const _SS   = _Core.StateService;
+
+// Alias de compatibilidad — mantiene todas las llamadas existentes funcionando
+// Las funciones originales setText/setHtml/etc se preservan, el core las refuerza
+if(typeof setText==='undefined')   window.setText   = _Core.DOM.setText.bind(_Core.DOM);
+if(typeof setHtml==='undefined')   window.setHtml   = _Core.DOM.setHtml.bind(_Core.DOM);
+if(typeof setDisp==='undefined')   window.setDisp   = _Core.DOM.setDisp.bind(_Core.DOM);
+if(typeof openModal==='undefined') window.openModal = _Core.DOM.openModal.bind(_Core.DOM);
+if(typeof closeModal==='undefined')window.closeModal= _Core.DOM.closeModal.bind(_Core.DOM);
+if(typeof flash==='undefined')     window.flash     = _Core.DOM.flash.bind(_Core.DOM);
+if(typeof money==='undefined')     window.money     = _Core.Fmt.money.bind(_Core.Fmt);
+if(typeof tb==='undefined')        window.tb        = _Core.Fmt.tb.bind(_Core.Fmt);
+if(typeof badge==='undefined')     window.badge     = _Core.Fmt.badge.bind(_Core.Fmt);
+if(typeof genId==='undefined')     window.genId     = _Core.Fmt.genId.bind(_Core.Fmt);
+
+// Escuchar eventos entrantes del shell (cuando corre en iframe)
+window.addEventListener('message', e => {
+  if(!e.data?.zytek) return;
+  _Bus._dispatch(e.data);
+});
+
+// Re-publicar eventos del bus hacia el shell
+const _origBusEmit = _Bus.emit.bind(_Bus);
+_Bus.emit = function(event, payload, persist) {
+  _origBusEmit(event, payload, persist);
+  if(window.parent !== window) {
+    try { window.parent.postMessage({ zytek:true, event, payload }, '*'); } catch(_){}
+  }
+};
+
+// ══ CONFIG ══
+const WARN_MIN  = 8;   // minutos → amarillo
+const LATE_MIN  = 15;  // minutos → rojo + pulso
+
+// ══ ESTACIONES ══
+const STATIONS = {
+  cocina: { label:'Cocina',  icon:'🔥', cats:['carnes','aves','mariscos','pastas','sopas','entradas','ensaladas','postres','hamburguesas','sandwiches','menu-dia'] },
+  horno:  { label:'Pizzas',  icon:'🍕', cats:['pizzas'] },
+  barra:  { label:'Barra',   icon:'🍹', cats:['bebidas','cocteles','vinos','cervezas'] },
+};
+
+function getStation(catId){
+  for(const [id,s] of Object.entries(STATIONS)){
+    if(s.cats.includes(catId)) return id;
+  }
+  return 'cocina'; // default
+}
+
+// ══ STATE ══
+let ORDERS      = [];  // array de comandas activas
+let BUMPED      = [];  // órdenes completadas/bumpeadas
+let soundOn     = true;
+let currentStation = 'all';
+let showRecalled   = false;
+let demoCounter    = 1;
+
+// ══ DEMO DATA ══
+const DEMO_ITEMS = [
+  {name:'Lomo a la plancha',   qty:1, cat:'carnes',   mods:['Sin sal','Término medio']},
+  {name:'Pollo al ajillo',     qty:2, cat:'aves',      mods:['Extra salsa']},
+  {name:'Pizza Margarita',     qty:1, cat:'pizzas',    mods:['Borde relleno']},
+  {name:'Pizza Pepperoni',     qty:1, cat:'pizzas',    mods:[]},
+  {name:'Mojito',              qty:3, cat:'cocteles',  mods:[]},
+  {name:'Pasta Carbonara',     qty:1, cat:'pastas',    mods:['Sin pimienta']},
+  {name:'Ensalada César',      qty:2, cat:'ensaladas', mods:[]},
+  {name:'Sopa de pollo',       qty:1, cat:'sopas',     mods:[], nota:'Sin cilantro'},
+  {name:'Cerveza Polar',       qty:4, cat:'cervezas',  mods:['Bien fría']},
+  {name:'Pabellón criollo',    qty:1, cat:'menu-dia',  mods:['Doble carne']},
+  {name:'Churrasco',           qty:2, cat:'carnes',    mods:['Término 3/4']},
+  {name:'Agua mineral',        qty:2, cat:'bebidas',   mods:[]},
+];
+
+const MESAS = ['M1','M2','M3','M5','M7','M8','V2','T1','T3','B2','B5','P1'];
+const MESEROS = ['Ana Q.','Carlos R.','Luis P.','María G.'];
+
+function addDemoOrder(){
+  const mesa = MESAS[Math.floor(Math.random()*MESAS.length)];
+  const mesero = MESEROS[Math.floor(Math.random()*MESEROS.length)];
+  const numItems = 1 + Math.floor(Math.random()*4);
+  const shuffled = [...DEMO_ITEMS].sort(()=>Math.random()-.5).slice(0,numItems);
+
+  // Group by station
+  const byStation = {};
+  shuffled.forEach(item=>{
+    const st = getStation(item.cat);
+    if(!byStation[st]) byStation[st] = [];
+    byStation[st].push({...item, done:false, uid: Math.random().toString(36).slice(2)});
+  });
+
+  Object.entries(byStation).forEach(([station, items])=>{
+    const order = {
+      id: 'O-' + Date.now() + '-' + (demoCounter++),
+      mesa, mesero, station,
+      status: 'pending',
+      items,
+      createdAt: Date.now(),
+      startedAt: null,
+      completedAt: null,
+    };
+    ORDERS.push(order);
+    if(soundOn) playBeep('new');
+    showAlert(`🔔 Nueva orden · ${mesa} · ${items.length} ítem${items.length!==1?'s':''}`);
+  });
+
+  render();
+}
+
+// ══ RENDER ══
+function render(){
+  const cols = { pending:[], cooking:[], ready:[], late:[] };
+  const now = Date.now();
+
+  // Classify orders
+  ORDERS.forEach(o=>{
+    const mins = (now - o.createdAt)/60000;
+    if(o.status==='pending'){
+      if(mins >= LATE_MIN) cols.late.push(o);
+      else cols.pending.push(o);
+    } else if(o.status==='cooking'){
+      if(mins >= LATE_MIN) cols.late.push(o);
+      else cols.cooking.push(o);
+    } else if(o.status==='ready'){
+      cols.ready.push(o);
+    }
+  });
+
+  // Filter by station
+  const filter = st => currentStation==='all' ? st : st.filter(o=>o.station===currentStation);
+
+  renderCol('col-pending', filter(cols.pending), 'pending');
+  renderCol('col-cooking', filter(cols.cooking), 'cooking');
+  renderCol('col-ready',   filter(cols.ready),   'ready');
+  renderCol('col-late',    filter(cols.late),     'late');
+
+  // Update headers
+  ['pending','cooking','ready','late'].forEach(s=>{
+    document.getElementById('ch-'+s).textContent = filter(cols[s]).length;
+  });
+
+  // KPI bar
+  document.getElementById('kpi-pending').textContent = cols.pending.length;
+  document.getElementById('kpi-cooking').textContent = cols.cooking.length;
+  document.getElementById('kpi-ready').textContent   = cols.ready.length;
+  document.getElementById('kpi-late').textContent    = cols.late.length;
+
+  // Station counts
+  const allActive = ORDERS.filter(o=>o.status!=='bumped');
+  document.getElementById('cnt-all').textContent    = allActive.length;
+  document.getElementById('cnt-cocina').textContent = allActive.filter(o=>o.station==='cocina').length;
+  document.getElementById('cnt-horno').textContent  = allActive.filter(o=>o.station==='horno').length;
+  document.getElementById('cnt-barra').textContent  = allActive.filter(o=>o.station==='barra').length;
+
+  // Avg time (cooking orders)
+  const cooking = ORDERS.filter(o=>o.status==='cooking'&&o.startedAt);
+  if(cooking.length){
+    const avg = cooking.reduce((s,o)=>(s+(now-o.startedAt)/60000),0)/cooking.length;
+    document.getElementById('kpi-avg').textContent = avg.toFixed(1)+'min';
+  } else {
+    document.getElementById('kpi-avg').textContent = '—';
+  }
+}
+
+function renderCol(colId, orders, type){
+  const col = document.getElementById(colId);
+  if(!orders.length){
+    col.innerHTML = `<div class="col-empty">
+      <div class="col-empty-icon">${{pending:'⏳',cooking:'👨‍🍳',ready:'✅',late:'⚠️'}[type]||'—'}</div>
+      <div>${{pending:'Sin pendientes',cooking:'Nada en cocina',ready:'Nada listo',late:'Sin tardíos'}[type]||''}</div>
+    </div>`;
+    return;
+  }
+
+  // Sort: oldest first
+  orders.sort((a,b)=>a.createdAt-b.createdAt);
+
+  col.innerHTML = orders.map(o=>buildCard(o,type)).join('');
+}
+
+function buildCard(o, type){
+  const now = Date.now();
+  const mins = (now - o.createdAt)/60000;
+  const timerClass = mins>=LATE_MIN?'timer-late':mins>=WARN_MIN?'timer-warn':'timer-ok';
+  const timerLabel = mins<1?`${Math.floor(mins*60)}s`:`${Math.floor(mins)}min`;
+
+  const stInfo = STATIONS[o.station]||{icon:'🍽️',label:'Cocina'};
+  const doneCount = o.items.filter(i=>i.done).length;
+  const totalCount = o.items.length;
+
+  const itemsHtml = o.items.map(item=>`
+    <div class="dish-row ${item.done?'done':''}" id="dish-${item.uid}">
+      <div class="dish-check ${item.done?'done':''}" onclick="toggleItem('${o.id}','${item.uid}')">
+        ${item.done?'✓':''}
+      </div>
+      <div class="dish-qty">×${item.qty}</div>
+      <div style="flex:1;min-width:0">
+        <div class="dish-name">${item.name}</div>
+        ${item.mods&&item.mods.length?`<div class="dish-mods">${item.mods.map(m=>`• ${m}`).join(' ')}</div>`:''}
+        ${item.nota?`<div class="dish-nota">📝 ${item.nota}</div>`:''}
+      </div>
+    </div>`).join('');
+
+  const bumpBtn = type==='ready'
+    ? `<button class="cbtn cbtn-bump" onclick="bumpOrder('${o.id}')">✓ Servido</button>`
+    : type==='cooking'
+    ? `<button class="cbtn cbtn-bump" onclick="advanceOrder('${o.id}')">✓ Listo</button>`
+    : `<button class="cbtn cbtn-bump" onclick="advanceOrder('${o.id}')">▶ Cocinar</button>`;
+
+  return `<div class="order-card card-${type==='cooking'&&(now-o.createdAt)/60000<LATE_MIN?'cooking':type}" id="card-${o.id}">
+    <div class="card-head">
+      <div class="card-mesa">${o.mesa}</div>
+      <div class="card-mesero">${o.mesero}</div>
+      <div class="card-station-badge">${stInfo.icon} ${stInfo.label}</div>
+      <div class="card-timer ${timerClass}">${timerLabel}</div>
+    </div>
+    <div class="dish-list">${itemsHtml}</div>
+    <div class="card-foot">
+      <div class="card-items-left">${doneCount}/${totalCount} listos</div>
+      <div class="card-foot-btns">
+        <button class="cbtn cbtn-void" onclick="voidOrder('${o.id}')" title="Cancelar">✕</button>
+        <button class="cbtn cbtn-recall" onclick="recallOrder('${o.id}')" title="Recordar">🔁</button>
+        ${bumpBtn}
+      </div>
+    </div>
+  </div>`;
+}
+
+// ══ ACTIONS ══
+function toggleItem(orderId, uid){
+  const o = ORDERS.find(x=>x.id===orderId);
+  if(!o) return;
+  const item = o.items.find(i=>i.uid===uid);
+  if(item) item.done = !item.done;
+  // Auto-advance if all items done
+  if(o.items.every(i=>i.done) && o.status==='cooking'){
+    o.status='ready';
+    if(soundOn) playBeep('ready');
+    showAlert(`✅ ${o.mesa} — Todo listo`, 'ready');
+  }
+  render();
+}
+
+function advanceOrder(orderId){
+  const o = ORDERS.find(x=>x.id===orderId);
+  if(!o) return;
+  if(o.status==='pending'){
+    o.status='cooking';
+    o.startedAt=Date.now();
+    if(soundOn) playBeep('start');
+  } else if(o.status==='cooking'){
+    o.status='ready';
+    o.items.forEach(i=>i.done=true);
+    if(soundOn) playBeep('ready');
+    showAlert(`✅ ${o.mesa} — Listo para servir`, 'ready');
+  }
+  const card = document.getElementById('card-'+orderId);
+  if(card) card.classList.add('bumping');
+  render();
+}
+
+function bumpOrder(orderId){
+  const o = ORDERS.find(x=>x.id===orderId);
+  if(!o) return;
+  o.completedAt = Date.now();
+  o.status = 'bumped';
+  BUMPED.unshift(o);
+  ORDERS = ORDERS.filter(x=>x.id!==orderId);
+  if(soundOn) playBeep('bump');
+  render();
+}
+
+function recallOrder(orderId){
+  // Move from bumped back to cooking
+  const o = BUMPED.find(x=>x.id===orderId);
+  if(!o) return;
+  o.status='cooking';
+  o.completedAt=null;
+  o.items.forEach(i=>i.done=false);
+  BUMPED = BUMPED.filter(x=>x.id!==orderId);
+  ORDERS.push(o);
+  render();
+  closeRecall();
+  showAlert(`🔁 ${o.mesa} — Reactivada en cocina`, 'warn');
+}
+
+function voidOrder(orderId){
+  if(!confirm('¿Anular esta orden?')) return;
+  ORDERS = ORDERS.filter(x=>x.id!==orderId);
+  render();
+}
+
+// ══ STATION FILTER ══
+function selectStation(st, el){
+  currentStation = st;
+  document.querySelectorAll('.stab').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  render();
+}
+
+// ══ RECALL MODAL ══
+function toggleRecalled(){
+  const modal = document.getElementById('modal-recall');
+  const list  = document.getElementById('recall-list');
+  if(!BUMPED.length){
+    alert('No hay órdenes bumpeadas aún.');
+    return;
+  }
+  list.innerHTML = BUMPED.map(o=>`
+    <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:10px 12px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <span style="font-family:'Fraunces',serif;font-size:16px;font-weight:900">${o.mesa}</span>
+        <span style="font-size:10px;font-family:'DM Mono',monospace;color:var(--text-mid)">${o.mesero}</span>
+        <span style="margin-left:auto;font-size:10px;font-family:'DM Mono',monospace;color:var(--text-mid)">
+          Bumpeado ${timeSince(o.completedAt)}
+        </span>
+        <button class="cbtn cbtn-recall" onclick="recallOrder('${o.id}')">🔁 Reactivar</button>
+      </div>
+      <div style="font-size:11px;color:var(--text-mid)">${o.items.map(i=>`${i.qty}× ${i.name}`).join(' · ')}</div>
+    </div>`).join('');
+  modal.classList.add('open');
+}
+function closeRecall(){
+  document.getElementById('modal-recall').classList.remove('open');
+}
+
+// ══ SOUND ══
+let _audioCtx = null;
+
+function getAudioCtx(){
+  if(!_audioCtx){
+    _audioCtx = new(window.AudioContext||window.webkitAudioContext)();
+  }
+  // Resume si está suspendido (política autoplay del browser)
+  if(_audioCtx.state==='suspended') _audioCtx.resume();
+  return _audioCtx;
+}
+
+// Desbloquear AudioContext con el primer click del usuario
+document.addEventListener('click', ()=>{ try{ getAudioCtx(); }catch(e){} }, {once:false});
+document.addEventListener('touchstart', ()=>{ try{ getAudioCtx(); }catch(e){} }, {once:false});
+
+function playTone(freq, duration, vol=0.35, type='sine', delay=0){
+  try{
+    const ctx  = getAudioCtx();
+    const osc  = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = type;
+    osc.frequency.value = freq;
+    const t = ctx.currentTime + delay;
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(vol, t + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+    osc.start(t);
+    osc.stop(t + duration + 0.05);
+  }catch(e){}
+}
+
+function playBeep(type){
+  if(!soundOn) return;
+  switch(type){
+    case 'new':
+      // Triple beep ascendente — llamada de atención para nueva orden
+      playTone(660,  0.12, 0.4, 'square', 0.00);
+      playTone(880,  0.12, 0.4, 'square', 0.15);
+      playTone(1100, 0.18, 0.4, 'square', 0.30);
+      break;
+    case 'start':
+      // Beep doble suave — orden empezada
+      playTone(660, 0.1, 0.25, 'sine', 0.00);
+      playTone(880, 0.1, 0.25, 'sine', 0.15);
+      break;
+    case 'ready':
+      // Acorde de éxito — orden lista
+      playTone(784, 0.15, 0.3, 'sine', 0.00);
+      playTone(988, 0.15, 0.3, 'sine', 0.00);
+      playTone(1175,0.25, 0.3, 'sine', 0.15);
+      break;
+    case 'bump':
+      // Beep grave — bumpeado
+      playTone(440, 0.2, 0.2, 'sine', 0);
+      break;
+    case 'warn':
+      // Alerta repetida — tardío
+      playTone(440, 0.1, 0.35, 'square', 0.00);
+      playTone(440, 0.1, 0.35, 'square', 0.18);
+      playTone(440, 0.1, 0.35, 'square', 0.36);
+      break;
+  }
+}
+
+function toggleSound(){
+  soundOn=!soundOn;
+  const btn=document.getElementById('btn-sound');
+  btn.textContent = soundOn?'🔔 Sonido':'🔕 Silencio';
+  btn.classList.toggle('active',soundOn);
+  if(soundOn) playBeep('start'); // confirmar que el sonido funciona
+}
+
+// ══ ALERTS ══
+function showAlert(msg, type='new'){
+  const bar=document.getElementById('alert-bar');
+  const div=document.createElement('div');
+  div.className='alert-item';
+  div.style.background = type==='ready'?'var(--ready-dim)':type==='warn'?'rgba(255,192,64,.12)':'var(--late-dim)';
+  div.style.borderBottomColor = type==='ready'?'var(--ready-b)':type==='warn'?'rgba(255,192,64,.35)':'var(--late-b)';
+  div.style.color = type==='ready'?'var(--green)':type==='warn'?'var(--amber)':'var(--red)';
+  div.textContent = msg;
+  bar.appendChild(div);
+  setTimeout(()=>div.remove(),3500);
+}
+
+// ══ UTILS ══
+function timeSince(ts){
+  const s=(Date.now()-ts)/1000;
+  if(s<60) return `${Math.floor(s)}s`;
+  return `${Math.floor(s/60)}min`;
+}
+
+// ══ CLOCK & TIMERS ══
+function updateClock(){
+  document.getElementById('clock').textContent=new Date().toLocaleTimeString('es-VE',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+setInterval(updateClock,1000);
+updateClock();
+
+// Re-render every 30s to refresh timers
+setInterval(()=>{
+  render();
+  // Auto-alert orders going late
+  ORDERS.forEach(o=>{
+    const mins=(Date.now()-o.createdAt)/60000;
+    if(mins>=LATE_MIN && o.status!=='ready' && !o._lateAlerted){
+      o._lateAlerted=true;
+      if(soundOn) playBeep('warn');
+      showAlert(`⚠️ ${o.mesa} lleva ${Math.floor(mins)} min sin servir`,'warn');
+    }
+  });
+},30000);
+
+// ══ AUDIO UNLOCK ══
+function unlockAudio(){
+  const overlay = document.getElementById('sound-unlock');
+  try{
+    getAudioCtx();
+    playBeep('new'); // sonido de bienvenida
+  }catch(e){}
+  overlay.style.opacity='0';
+  overlay.style.transition='opacity .4s';
+  setTimeout(()=>overlay.remove(), 400);
+}
+
+// ══ THEME ══
+function toggleTheme(){
+  const h=document.documentElement;
+  h.dataset.theme = h.dataset.theme==='dark'?'light':'dark';
+}
+
+// ══ BOOT — demo orders ══
+function init(){
+  // Add 3 demo orders to start
+  setTimeout(()=>addDemoOrder(),200);
+  setTimeout(()=>addDemoOrder(),400);
+  setTimeout(()=>addDemoOrder(),600);
+}
+init();
+
+// ════════════════════════════════════════════════════════
+//  KDS → EventBus integration (v2.0)
+// ════════════════════════════════════════════════════════
+
+// Escuchar nuevas órdenes del POS
+_Bus.on('venta.cerrada', (payload) => {
+  if(payload.items?.length) {
+    // Agregar como nueva orden al KDS
+    try { addDemoOrder?.(); } catch(_) {}
+  }
+});
+
+_Reg.register('kds', {
+  name: 'KDS Cocina',
+  version: '2.0.0',
+  standalone: true,
+  api: { getOrders: () => typeof ORDERS !== 'undefined' ? ORDERS : [] }
+});
+
+console.info('[ZytekOS] KDS v2.0 listo · Core integrado');
+
+</script>
+</body>
+</html>

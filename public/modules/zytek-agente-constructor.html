@@ -1,0 +1,1351 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ZytekOS Constructor SOLID</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@700;900&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ZytekOS v2: CSS tokens managed by zytek-core.js
+:root{
+  --bg:#0a0d12;--s1:#111520;--s2:#181e2e;--s3:#1e2640;
+  --b:rgba(255,255,255,.07);--b2:rgba(255,255,255,.14);
+  --t:#f0f2f7;--tm:#8b93a8;--td:#4a5166;
+  --or:#ff7c20;--orb:rgba(255,124,32,.35);--ord:rgba(255,124,32,.1);
+  --gr:#2ee87a;--grd:rgba(46,232,122,.1);
+  --cy:#00d4ff;--cyd:rgba(0,212,255,.08);
+  --am:#ffc040;--amd:rgba(255,192,64,.1);
+  --re:#ff4d4d;--red:rgba(255,77,77,.1);
+  --pu:#a78bfa;--pud:rgba(167,139,250,.1);
+  --bl:#4fa3e8;--bld:rgba(79,163,232,.1);
+  --fn:"DM Sans",sans-serif;--mo:"DM Mono",monospace;--se:"Fraunces",serif;
+}
+*/
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--t);font-family:var(--fn);height:100vh;overflow:hidden}
+.app{display:grid;grid-template-columns:262px 1fr;grid-template-rows:50px 1fr;height:100vh}
+/* TOPBAR */
+.topbar{grid-column:1/-1;background:var(--s1);border-bottom:1px solid var(--b);display:flex;align-items:center;gap:10px;padding:0 18px}
+.bi{width:28px;height:28px;background:var(--or);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.bn{font-family:var(--se);font-weight:700;font-size:13px}
+.bs{font-size:9px;font-family:var(--mo);color:var(--td);letter-spacing:2px;margin-top:1px}
+.tml{margin-left:auto;display:flex;align-items:center;gap:7px}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--gr);box-shadow:0 0 6px var(--gr);animation:p 2s infinite}
+@keyframes p{0%,100%{opacity:1}50%{opacity:.3}}
+.badge{font-size:9px;font-family:var(--mo);padding:2px 8px;border-radius:10px;border:1px solid}
+.bo{background:var(--ord);color:var(--or);border-color:var(--orb)}
+.bg{background:var(--grd);color:var(--gr);border-color:rgba(46,232,122,.2)}
+.bc{background:var(--cyd);color:var(--cy);border-color:rgba(0,212,255,.2)}
+.ba{background:var(--amd);color:var(--am);border-color:rgba(255,192,64,.2)}
+/* SIDEBAR */
+.sb{background:var(--s1);border-right:1px solid var(--b);overflow-y:auto;display:flex;flex-direction:column}
+.sl{padding:9px 13px 3px;font-size:9px;font-family:var(--mo);color:var(--td);letter-spacing:2px;flex-shrink:0}
+.ar{padding:8px 13px;display:flex;align-items:center;gap:8px;cursor:pointer;border-left:2px solid transparent;transition:all .13s}
+.ar:hover{background:var(--s2)}
+.ar.active{background:var(--s2);border-left-color:var(--or)}
+.ar.st-r{border-left-color:var(--cy);background:var(--cyd)}
+.ar.st-d{border-left-color:var(--gr);background:var(--grd)}
+.ar.st-e{border-left-color:var(--re);background:var(--red)}
+.ai{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;border:1px solid var(--b)}
+.an{font-size:11px;font-weight:600;color:var(--t)}
+.ar2{font-size:9px;color:var(--td);font-family:var(--mo);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ast{font-size:9px;font-family:var(--mo);padding:1px 5px;border-radius:3px;flex-shrink:0;min-width:42px;text-align:center}
+.si{background:rgba(255,255,255,.04);color:var(--td)}
+.sr{background:var(--cyd);color:var(--cy);animation:blink .7s ease infinite alternate}
+.sq{background:var(--amd);color:var(--am);animation:blink .7s ease infinite alternate}
+.sd{background:var(--grd);color:var(--gr)}
+.se{background:var(--red);color:var(--re)}
+@keyframes blink{from{opacity:.5}to{opacity:1}}
+.div{height:1px;background:var(--b);margin:5px 0;flex-shrink:0}
+.rmi{padding:6px 13px;display:flex;align-items:center;gap:6px;cursor:pointer;transition:background .12s;font-size:10px}
+.rmi:hover{background:var(--s2)}
+.rmd{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.rms{font-size:9px;font-family:var(--mo);padding:1px 5px;border-radius:3px;flex-shrink:0}
+.rs-d{background:var(--grd);color:var(--gr)}
+.rs-p{background:var(--amd);color:var(--am)}
+.rs-n{background:rgba(255,255,255,.04);color:var(--td)}
+.fpi{padding:6px 13px;display:flex;align-items:center;gap:7px;border-bottom:1px solid var(--b)}
+/* MAIN */
+.main{display:flex;flex-direction:column;overflow:hidden}
+.mhd{padding:14px 20px 10px;border-bottom:1px solid var(--b);flex-shrink:0}
+.mt{font-family:var(--se);font-size:18px;font-weight:700}
+.ms{font-size:11px;color:var(--td);margin-top:2px}
+.pb{height:2px;background:var(--b);border-radius:1px;overflow:hidden;margin-top:7px}
+.pf{height:100%;background:linear-gradient(90deg,var(--or),var(--cy));transition:width .4s ease;width:0}
+/* PIPELINE */
+.pw{padding:8px 20px;border-bottom:1px solid var(--b);flex-shrink:0;display:none}
+.plbl{font-size:9px;font-family:var(--mo);color:var(--td);letter-spacing:2px;margin-bottom:5px}
+.pipe{display:flex;align-items:center;overflow-x:auto;gap:0}
+.ps{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:56px;flex-shrink:0}
+.psi{width:30px;height:30px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;border:1px solid var(--b);background:var(--s3);transition:all .25s}
+.psi.running{border-color:var(--cy);animation:glow .7s ease infinite alternate}
+.psi.done{border-color:var(--gr);background:var(--grd)}
+.psi.error{border-color:var(--re);background:var(--red)}
+.psi.qa{border-color:var(--am);background:var(--amd);animation:glow2 .7s ease infinite alternate}
+@keyframes glow{from{box-shadow:0 0 5px rgba(0,212,255,.2)}to{box-shadow:0 0 12px rgba(0,212,255,.5)}}
+@keyframes glow2{from{box-shadow:0 0 5px rgba(255,192,64,.2)}to{box-shadow:0 0 12px rgba(255,192,64,.5)}}
+.psl{font-size:8px;font-family:var(--mo);color:var(--td);text-align:center;line-height:1.3}
+.pa{width:16px;height:1px;background:var(--b2);flex-shrink:0;position:relative;top:-9px}
+.pa::after{content:"";position:absolute;right:-3px;top:-3px;border-left:5px solid var(--b2);border-top:3px solid transparent;border-bottom:3px solid transparent}
+/* CHAT */
+.chat{flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:9px}
+.msg{display:flex;flex-direction:column;max-width:89%}
+.msg.user{align-self:flex-end}
+.msg.assistant,.msg.agent,.msg.system,.msg.thinking{align-self:flex-start;width:auto}
+.msg.system{width:100%;max-width:100%}
+.mh{font-size:10px;font-family:var(--mo);color:var(--td);margin-bottom:3px}
+.bb{padding:10px 14px;border-radius:10px;font-size:12px;line-height:1.7}
+.msg.user .bb{background:var(--or);color:#000;font-weight:500;border-radius:10px 10px 3px 10px}
+.msg.assistant .bb{background:var(--s2);border:1px solid var(--b);border-radius:10px 10px 10px 3px}
+.msg.thinking .bb{background:var(--s2);border:1px dashed var(--b2);color:var(--td);font-style:italic;font-size:11px}
+.msg.system .bb{background:transparent;border:1px solid var(--b);color:var(--td);font-size:10px;font-family:var(--mo);padding:5px 11px;border-radius:6px;width:100%}
+.rc{background:var(--s2);border:1px solid var(--b);border-radius:9px;overflow:hidden;margin-top:2px}
+.rch{padding:8px 12px;border-bottom:1px solid var(--b);font-size:11px;font-weight:600;display:flex;align-items:center;gap:6px}
+.rcb{padding:10px 12px;font-size:11px;color:var(--tm);line-height:1.7;font-family:var(--mo)}
+.rcf{padding:8px 12px;border-top:1px solid var(--b);display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+.qp{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-family:var(--mo);padding:3px 8px;border-radius:5px;background:var(--grd);color:var(--gr);border:1px solid rgba(46,232,122,.2)}
+.qw{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-family:var(--mo);padding:3px 8px;border-radius:5px;background:var(--amd);color:var(--am);border:1px solid rgba(255,192,64,.2)}
+.qf{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-family:var(--mo);padding:3px 8px;border-radius:5px;background:var(--red);color:var(--re);border:1px solid rgba(255,77,77,.2)}
+.bdl{padding:5px 13px;background:var(--or);border:none;border-radius:7px;color:#000;font-size:11px;font-weight:700;cursor:pointer;transition:background .13s}
+.bdl:hover{background:#ff9040}
+.bpv{padding:5px 11px;background:var(--s3);border:1px solid var(--b2);border-radius:7px;color:var(--tm);font-size:11px;cursor:pointer;transition:all .13s}
+.bpv:hover{border-color:var(--orb);color:var(--or)}
+.fm{flex:1;font-size:10px;font-family:var(--mo);color:var(--td)}
+/* INPUT */
+.iw{padding:12px 20px;border-top:1px solid var(--b);flex-shrink:0}
+.qbs{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px}
+.qb{padding:4px 10px;background:var(--s2);border:1px solid var(--b2);border-radius:14px;font-size:10px;color:var(--tm);cursor:pointer;transition:all .12s;white-space:nowrap}
+.qb:hover{border-color:var(--orb);color:var(--or)}
+.ir{display:flex;gap:8px;align-items:flex-end}
+.ci{flex:1;background:var(--s2);border:1px solid var(--b2);border-radius:8px;padding:9px 13px;font-family:var(--fn);font-size:12px;color:var(--t);resize:none;outline:none;max-height:110px;overflow-y:auto;transition:border-color .13s;line-height:1.5}
+.ci:focus{border-color:var(--orb)}
+.ci::placeholder{color:var(--td)}
+.bs2{width:36px;height:36px;background:var(--or);border:none;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;transition:all .13s;flex-shrink:0;color:#000;font-weight:700}
+.bs2:hover{background:#ff9040;transform:scale(1.05)}
+.bs2:disabled{background:var(--s3);cursor:not-allowed;transform:none;color:var(--td)}
+::-webkit-scrollbar{width:3px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--b2);border-radius:2px}
+</style>
+<script src="zytek-core.js"></script>
+</head>
+<body>
+<div class="app">
+
+<div class="topbar">
+  <div class="bi">&#x1F916;</div>
+  <div><div class="bn">ZytekOS Constructor SOLID</div><div class="bs">S&#xB7;O&#xB7;L&#xB7;I&#xB7;D &nbsp;&#xB7;&nbsp; QA AUTO &nbsp;&#xB7;&nbsp; MULTI-AGENT</div></div>
+  <div class="tml">
+    <div class="dot" id="api-dot" style="background:var(--re);box-shadow:0 0 6px var(--re)"></div>
+    <span style="font-size:10px;font-family:var(--mo);color:var(--tm)" id="api-status-txt">desconectado</span>
+
+    <!-- Selector de backend -->
+    <div style="display:flex;gap:0;border:1px solid var(--b2);border-radius:7px;overflow:hidden">
+      <button id="btn-anthropic" onclick="switchBackend('anthropic')"
+        style="padding:4px 10px;font-size:10px;font-family:var(--mo);cursor:pointer;border:none;background:var(--or);color:#000;font-weight:700;transition:all .13s">
+        &#x2601; Anthropic
+      </button>
+      <button id="btn-ollama" onclick="switchBackend('ollama')"
+        style="padding:4px 10px;font-size:10px;font-family:var(--mo);cursor:pointer;border:none;background:var(--s3);color:var(--tm);transition:all .13s">
+        &#x1F999; Ollama
+      </button>
+    </div>
+
+    <!-- Panel Anthropic -->
+    <div id="panel-anthropic" style="display:flex;align-items:center;gap:7px">
+      <input id="api-key-input" type="password"
+        placeholder="sk-ant-api03-..."
+        oninput="setApiKey(this.value)"
+        style="background:var(--s2);border:1px solid var(--b2);border-radius:7px;padding:5px 10px;font-family:var(--mo);font-size:10px;color:var(--t);outline:none;width:200px;transition:border-color .15s"
+        onfocus="this.style.borderColor='var(--orb)'" onblur="this.style.borderColor='var(--b2)'">
+      <select id="sel-ant-model" onchange="ACTIVE_MODEL=this.value;updateStatusBar()"
+        style="background:var(--s2);border:1px solid var(--b2);border-radius:7px;padding:4px 8px;font-family:var(--mo);font-size:10px;color:var(--tm);outline:none;cursor:pointer">
+        <option value="claude-sonnet-4-20250514">Sonnet 4</option>
+        <option value="claude-opus-4-20250514">Opus 4</option>
+        <option value="claude-haiku-4-5-20251001">Haiku 4.5</option>
+      </select>
+    </div>
+
+    <!-- Panel Ollama -->
+    <div id="panel-ollama" style="display:none;align-items:center;gap:7px">
+      <span id="ollama-status" style="font-size:10px;font-family:var(--mo);color:var(--re)">buscando...</span>
+      <select id="sel-oll-model" onchange="ACTIVE_MODEL=this.value;updateStatusBar()"
+        style="background:var(--s2);border:1px solid var(--b2);border-radius:7px;padding:4px 8px;font-family:var(--mo);font-size:10px;color:var(--tm);outline:none;cursor:pointer">
+        <option value="llama3.2">llama3.2</option>
+      </select>
+      <button onclick="detectOllama()"
+        style="padding:4px 8px;background:var(--s3);border:1px solid var(--b2);border-radius:7px;font-family:var(--mo);font-size:10px;color:var(--tm);cursor:pointer">
+        &#x21BB; detectar
+      </button>
+    </div>
+
+    <span class="badge bg" id="badge-agents">7 agentes</span>
+    <span class="badge ba" id="badge-qa">QA auto</span>
+  </div>
+</div>
+
+<div class="sb">
+  <div class="sl">AGENTES</div>
+  <div class="ar active" id="ac-orq" onclick="selAg('orq')">
+    <div class="ai" style="background:var(--ord);border-color:var(--orb)">&#x1F9E0;</div>
+    <div style="flex:1;min-width:0"><div class="an">Orquestador</div><div class="ar2">Planifica y coordina</div></div>
+    <span class="ast si" id="st-orq">listo</span>
+  </div>
+  <div class="ar" id="ac-anl" onclick="selAg('anl')">
+    <div class="ai" style="background:var(--bld);border-color:rgba(79,163,232,.2)">&#x1F50D;</div>
+    <div style="flex:1;min-width:0"><div class="an">Analista</div><div class="ar2">Audita gaps</div></div>
+    <span class="ast si" id="st-anl">listo</span>
+  </div>
+  <div class="ar" id="ac-dis" onclick="selAg('dis')">
+    <div class="ai" style="background:var(--pud);border-color:rgba(167,139,250,.2)">&#x1F3A8;</div>
+    <div style="flex:1;min-width:0"><div class="an">Diseñador UX</div><div class="ar2">Flujos y componentes</div></div>
+    <span class="ast si" id="st-dis">listo</span>
+  </div>
+  <div class="ar" id="ac-dev" onclick="selAg('dev')">
+    <div class="ai" style="background:var(--cyd);border-color:rgba(0,212,255,.2)">&#x2699;&#xFE0F;</div>
+    <div style="flex:1;min-width:0"><div class="an">Desarrollador</div><div class="ar2">Genera archivos</div></div>
+    <span class="ast si" id="st-dev">listo</span>
+  </div>
+  <div class="ar" id="ac-qa" onclick="selAg('qa')">
+    <div class="ai" style="background:var(--amd);border-color:rgba(255,192,64,.2)">&#x1F9EA;</div>
+    <div style="flex:1;min-width:0"><div class="an">QA Engineer</div><div class="ar2">12-point checklist</div></div>
+    <span class="ast si" id="st-qa">listo</span>
+  </div>
+  <div class="ar" id="ac-val" onclick="selAg('val')">
+    <div class="ai" style="background:var(--grd);border-color:rgba(46,232,122,.2)">&#x2705;</div>
+    <div style="flex:1;min-width:0"><div class="an">Validador</div><div class="ar2">Lógica y edge cases</div></div>
+    <span class="ast si" id="st-val">listo</span>
+  </div>
+  <div class="ar" id="ac-doc" onclick="selAg('doc')">
+    <div class="ai" style="background:rgba(255,124,32,.08);border-color:rgba(255,124,32,.15)">&#x1F4CB;</div>
+    <div style="flex:1;min-width:0"><div class="an">Documentador</div><div class="ar2">Specs y roadmap</div></div>
+    <span class="ast si" id="st-doc">listo</span>
+  </div>
+  <div class="div"></div>
+  <div class="sl">ROADMAP</div>
+  <div id="rmlist"></div>
+  <div class="div"></div>
+  <div class="sl">ARCHIVOS GENERADOS</div>
+  <div style="padding:4px 13px"><span id="fc" style="font-size:10px;font-family:var(--mo);color:var(--td)">Ninguno aun</span></div>
+  <div id="fpanel"></div>
+  <div class="div"></div>
+  <div style="padding:8px 13px">
+    <button onclick="limpiar()" style="width:100%;padding:6px;background:var(--s3);border:1px solid var(--b);border-radius:7px;color:var(--td);font-size:10px;font-family:var(--mo);cursor:pointer">
+      Limpiar conversacion
+    </button>
+  </div>
+</div>
+
+<div class="main">
+  <div class="mhd">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <div>
+        <div class="mt">Constructor ZytekOS</div>
+        <div class="ms">Pipeline: Analista &#8594; UX &#8594; Dev &#8594; <strong style="color:var(--am)">QA auto</strong> &#8594; Validador &#8594; Docs &nbsp;&#xB7;&nbsp; Genera archivos descargables</div>
+      </div>
+      <!-- Tab bar -->
+      <div style="display:flex;gap:0;border:1px solid var(--b2);border-radius:8px;overflow:hidden;flex-shrink:0">
+        <button id="tab-chat" onclick="switchTab('chat')"
+          style="padding:5px 14px;font-size:10px;font-family:var(--mo);cursor:pointer;border:none;background:var(--or);color:#000;font-weight:700;transition:all .13s">
+          &#x1F4AC; Chat
+        </button>
+        <button id="tab-info" onclick="switchTab('info')"
+          style="padding:5px 14px;font-size:10px;font-family:var(--mo);cursor:pointer;border:none;background:var(--s3);color:var(--tm);font-weight:400;transition:all .13s">
+          &#x2139; Como funciona
+        </button>
+      </div>
+    </div>
+    <div class="pb" style="margin-top:8px"><div class="pf" id="prog"></div></div>
+  </div>
+  <div class="pw" id="pw">
+    <div class="plbl">PIPELINE</div>
+    <div class="pipe" id="pv"></div>
+  </div>
+
+  <!-- CHAT PANEL -->
+  <div id="panel-chat" style="display:flex;flex-direction:column;flex:1;overflow:hidden">
+    <div class="chat" id="chat"></div>
+  </div><!-- /panel-chat -->
+
+  <!-- INFO PANEL -->
+  <div id="panel-info" style="display:none;flex:1;overflow-y:auto;padding:20px 24px">
+
+    <!-- Header -->
+    <div style="margin-bottom:24px">
+      <div style="font-family:var(--se);font-size:22px;font-weight:700;color:var(--t);margin-bottom:6px">Como funciona el multi-agente</div>
+      <div style="font-size:12px;color:var(--td);font-family:var(--mo)">Arquitectura SOLID · 7 agentes especializados · QA automatico · Dual backend</div>
+    </div>
+
+    <!-- FLUJO VISUAL SVG -->
+    <div style="background:var(--s2);border:1px solid var(--b);border-radius:12px;padding:20px;margin-bottom:20px;overflow-x:auto">
+      <div style="font-size:9px;font-family:var(--mo);color:var(--td);letter-spacing:2px;margin-bottom:14px">PIPELINE DE EJECUCION</div>
+      <svg width="100%" viewBox="0 0 700 110" xmlns="http://www.w3.org/2000/svg" style="min-width:580px">
+        <defs><marker id="ia" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#4a5166" stroke-width="1.5" stroke-linecap="round"/></marker></defs>
+        <!-- Nodes -->
+        <g><!-- Tu --><rect x="4" y="35" width="70" height="40" rx="6" fill="#1e2640" stroke="rgba(255,255,255,.14)" stroke-width="0.5"/><text x="39" y="51" text-anchor="middle" fill="#f0f2f7" font-size="9" font-family="DM Mono,monospace" font-weight="600">TU</text><text x="39" y="64" text-anchor="middle" fill="#8b93a8" font-size="8" font-family="DM Mono,monospace">mensaje</text></g>
+        <line x1="74" y1="55" x2="96" y2="55" stroke="#4a5166" stroke-width="1" marker-end="url(#ia)"/>
+        <g><!-- ORQ --><rect x="98" y="28" width="80" height="54" rx="6" fill="rgba(255,192,64,.12)" stroke="rgba(255,192,64,.4)" stroke-width="0.5"/><text x="138" y="46" text-anchor="middle" fill="#ffc040" font-size="9" font-family="DM Mono,monospace" font-weight="600">ORQ</text><text x="138" y="58" text-anchor="middle" fill="#8b93a8" font-size="8" font-family="DM Mono,monospace">planifica</text><text x="138" y="70" text-anchor="middle" fill="#8b93a8" font-size="8" font-family="DM Mono,monospace">JSON plan</text></g>
+        <line x1="178" y1="55" x2="200" y2="55" stroke="#4a5166" stroke-width="1" marker-end="url(#ia)"/>
+        <g><!-- ANL --><rect x="202" y="35" width="62" height="40" rx="6" fill="rgba(79,163,232,.1)" stroke="rgba(79,163,232,.3)" stroke-width="0.5"/><text x="233" y="51" text-anchor="middle" fill="#4fa3e8" font-size="9" font-family="DM Mono,monospace" font-weight="600">ANL</text><text x="233" y="64" text-anchor="middle" fill="#8b93a8" font-size="8" font-family="DM Mono,monospace">gaps</text></g>
+        <line x1="264" y1="55" x2="282" y2="55" stroke="#4a5166" stroke-width="1" marker-end="url(#ia)"/>
+        <g><!-- DIS --><rect x="284" y="35" width="62" height="40" rx="6" fill="rgba(167,139,250,.1)" stroke="rgba(167,139,250,.3)" stroke-width="0.5"/><text x="315" y="51" text-anchor="middle" fill="#a78bfa" font-size="9" font-family="DM Mono,monospace" font-weight="600">DIS</text><text x="315" y="64" text-anchor="middle" fill="#8b93a8" font-size="8" font-family="DM Mono,monospace">UX</text></g>
+        <line x1="346" y1="55" x2="364" y2="55" stroke="#4a5166" stroke-width="1" marker-end="url(#ia)"/>
+        <g><!-- DEV --><rect x="366" y="28" width="62" height="54" rx="6" fill="rgba(0,212,255,.08)" stroke="rgba(0,212,255,.3)" stroke-width="0.5"/><text x="397" y="46" text-anchor="middle" fill="#00d4ff" font-size="9" font-family="DM Mono,monospace" font-weight="600">DEV</text><text x="397" y="58" text-anchor="middle" fill="#8b93a8" font-size="8" font-family="DM Mono,monospace">genera</text><text x="397" y="70" text-anchor="middle" fill="#8b93a8" font-size="8" font-family="DM Mono,monospace">.html</text></g>
+        <line x1="428" y1="55" x2="446" y2="55" stroke="#4a5166" stroke-width="1" marker-end="url(#ia)"/>
+        <g><!-- QA --><rect x="448" y="28" width="62" height="54" rx="6" fill="rgba(255,192,64,.1)" stroke="rgba(255,192,64,.3)" stroke-width="0.5"/><text x="479" y="46" text-anchor="middle" fill="#ffc040" font-size="9" font-family="DM Mono,monospace" font-weight="600">QA</text><text x="479" y="58" text-anchor="middle" fill="#8b93a8" font-size="8" font-family="DM Mono,monospace">auto</text><text x="479" y="70" text-anchor="middle" fill="#8b93a8" font-size="8" font-family="DM Mono,monospace">7 checks</text></g>
+        <line x1="510" y1="55" x2="528" y2="55" stroke="#4a5166" stroke-width="1" marker-end="url(#ia)"/>
+        <g><!-- VAL --><rect x="530" y="35" width="62" height="40" rx="6" fill="rgba(46,232,122,.08)" stroke="rgba(46,232,122,.3)" stroke-width="0.5"/><text x="561" y="51" text-anchor="middle" fill="#2ee87a" font-size="9" font-family="DM Mono,monospace" font-weight="600">VAL</text><text x="561" y="64" text-anchor="middle" fill="#8b93a8" font-size="8" font-family="DM Mono,monospace">logica</text></g>
+        <line x1="592" y1="55" x2="610" y2="55" stroke="#4a5166" stroke-width="1" marker-end="url(#ia)"/>
+        <g><!-- ARCHIVO --><rect x="612" y="28" width="84" height="54" rx="6" fill="rgba(46,232,122,.1)" stroke="rgba(46,232,122,.4)" stroke-width="0.5"/><text x="654" y="46" text-anchor="middle" fill="#2ee87a" font-size="9" font-family="DM Mono,monospace" font-weight="600">ARCHIVO</text><text x="654" y="58" text-anchor="middle" fill="#8b93a8" font-size="8" font-family="DM Mono,monospace">descargable</text><text x="654" y="70" text-anchor="middle" fill="#8b93a8" font-size="8" font-family="DM Mono,monospace">+ QA result</text></g>
+        <!-- Leyenda -->
+        <text x="4" y="105" fill="#4a5166" font-size="8" font-family="DM Mono,monospace">* QA solo se activa cuando DEV genera un archivo</text>
+      </svg>
+    </div>
+
+    <!-- AGENTES -->
+    <div style="font-size:10px;font-family:var(--mo);color:var(--td);letter-spacing:2px;margin-bottom:10px">7 AGENTES ESPECIALIZADOS</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;margin-bottom:20px">
+      <div style="background:var(--s2);border:1px solid var(--b);border-radius:10px;padding:14px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span style="font-size:16px">&#x1F9E0;</span>
+          <span style="font-size:12px;font-weight:600;color:var(--am)">Orquestador</span>
+          <span style="font-size:9px;font-family:var(--mo);color:var(--td);margin-left:auto">max 800 tokens</span>
+        </div>
+        <div style="font-size:11px;color:var(--tm);line-height:1.6">Recibe tu mensaje, lo analiza y devuelve un <span style="color:var(--am);font-family:var(--mo)">JSON</span> con el plan: que agentes activar y en que orden. Al final consolida todos los resultados en un resumen de 3-4 lineas.</div>
+      </div>
+      <div style="background:var(--s2);border:1px solid var(--b);border-radius:10px;padding:14px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span style="font-size:16px">&#x1F50D;</span>
+          <span style="font-size:12px;font-weight:600;color:var(--bl)">Analista</span>
+          <span style="font-size:9px;font-family:var(--mo);color:var(--td);margin-left:auto">max 1000 tokens</span>
+        </div>
+        <div style="font-size:11px;color:var(--tm);line-height:1.6">Audita el estado del codigo. Detecta gaps con impacto <span style="color:var(--re)">CRITICO</span> / <span style="color:var(--am)">ALTO</span> / <span style="color:var(--gr)">BAJO</span>. Cita funciones reales del sistema como <span style="font-family:var(--mo);font-size:10px;color:var(--cy)">renderCompras()</span> o <span style="font-family:var(--mo);font-size:10px;color:var(--cy)">setRepCat()</span>.</div>
+      </div>
+      <div style="background:var(--s2);border:1px solid var(--b);border-radius:10px;padding:14px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span style="font-size:16px">&#x1F3A8;</span>
+          <span style="font-size:12px;font-weight:600;color:var(--pu)">Diseñador UX</span>
+          <span style="font-size:9px;font-family:var(--mo);color:var(--td);margin-left:auto">max 800 tokens</span>
+        </div>
+        <div style="font-size:11px;color:var(--tm);line-height:1.6">Define flujos de navegacion, propone IDs de elementos DOM, y revisa que la experiencia sea mobile-first (touch targets minimo 44px). Usa el design system existente de ZytekOS.</div>
+      </div>
+      <div style="background:var(--s2);border:1px solid var(--b);border-radius:10px;padding:14px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span style="font-size:16px">&#x2699;&#xFE0F;</span>
+          <span style="font-size:12px;font-weight:600;color:var(--cy)">Desarrollador</span>
+          <span style="font-size:9px;font-family:var(--mo);color:var(--td);margin-left:auto">max 4000 tokens</span>
+        </div>
+        <div style="font-size:11px;color:var(--tm);line-height:1.6">Genera el codigo HTML/CSS/JS completo usando el delimitador <span style="font-family:var(--mo);font-size:10px;color:var(--cy)">===ARCHIVO_INICIO:nombre.html===</span>. Cero placeholders, cero <span style="font-family:var(--mo);font-size:10px;color:var(--re)">alert()</span>, null guards en todo el DOM.</div>
+      </div>
+      <div style="background:var(--s2);border:1px solid rgba(255,192,64,.3);border-radius:10px;padding:14px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span style="font-size:16px">&#x1F9EA;</span>
+          <span style="font-size:12px;font-weight:600;color:var(--am)">QA Engineer</span>
+          <span style="font-size:9px;font-family:var(--mo);background:var(--amd);color:var(--am);padding:1px 6px;border-radius:3px;margin-left:auto">AUTO</span>
+        </div>
+        <div style="font-size:11px;color:var(--tm);line-height:1.6">Se activa automaticamente despues del Desarrollador. Corre 7 checks estaticos locales + revision con IA. Devuelve <span style="color:var(--gr)">QA PASS</span>, <span style="color:var(--am)">QA WARN</span> o <span style="color:var(--re)">QA FAIL</span> con la lista exacta de bugs.</div>
+      </div>
+      <div style="background:var(--s2);border:1px solid var(--b);border-radius:10px;padding:14px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span style="font-size:16px">&#x2705;</span>
+          <span style="font-size:12px;font-weight:600;color:var(--gr)">Validador</span>
+          <span style="font-size:9px;font-family:var(--mo);color:var(--td);margin-left:auto">max 800 tokens</span>
+        </div>
+        <div style="font-size:11px;color:var(--tm);line-height:1.6">Verifica la logica funcional: la implementacion hace lo que se pidio? Detecta edge cases no cubiertos y propone correcciones especificas con codigo exacto.</div>
+      </div>
+      <div style="background:var(--s2);border:1px solid var(--b);border-radius:10px;padding:14px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span style="font-size:16px">&#x1F4CB;</span>
+          <span style="font-size:12px;font-weight:600;color:var(--or)">Documentador</span>
+          <span style="font-size:9px;font-family:var(--mo);color:var(--td);margin-left:auto">max 800 tokens</span>
+        </div>
+        <div style="font-size:11px;color:var(--tm);line-height:1.6">Genera la documentacion tecnica: que se hizo, como integrarlo en los archivos existentes, archivos afectados y los pasos exactos para el siguiente sprint.</div>
+      </div>
+    </div>
+
+    <!-- QA CHECKS -->
+    <div style="font-size:10px;font-family:var(--mo);color:var(--td);letter-spacing:2px;margin-bottom:10px">7 CHECKS ESTATICOS DEL QA (se corren localmente sin llamada a la API)</div>
+    <div style="background:var(--s2);border:1px solid var(--b);border-radius:10px;overflow:hidden;margin-bottom:20px">
+      <table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead>
+          <tr style="background:var(--s3)">
+            <th style="padding:8px 14px;text-align:left;font-family:var(--mo);color:var(--td);font-size:9px;letter-spacing:1px;font-weight:400">#</th>
+            <th style="padding:8px 14px;text-align:left;font-family:var(--mo);color:var(--td);font-size:9px;letter-spacing:1px;font-weight:400">CHECK</th>
+            <th style="padding:8px 14px;text-align:left;font-family:var(--mo);color:var(--td);font-size:9px;letter-spacing:1px;font-weight:400">QUE BUSCA</th>
+            <th style="padding:8px 14px;text-align:left;font-family:var(--mo);color:var(--td);font-size:9px;letter-spacing:1px;font-weight:400">SI FALLA</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-top:1px solid var(--b)"><td style="padding:8px 14px;color:var(--td);font-family:var(--mo)">1</td><td style="padding:8px 14px;font-weight:600;color:var(--t)">CSS vars</td><td style="padding:8px 14px;color:var(--tm)">--or, --surface, --bg en el codigo</td><td style="padding:8px 14px;color:var(--re);font-family:var(--mo);font-size:10px">QA WARN</td></tr>
+          <tr style="border-top:1px solid var(--b);background:rgba(255,255,255,.015)"><td style="padding:8px 14px;color:var(--td);font-family:var(--mo)">2</td><td style="padding:8px 14px;font-weight:600;color:var(--t)">Tipografia</td><td style="padding:8px 14px;color:var(--tm)">DM Sans o Fraunces en los fonts</td><td style="padding:8px 14px;color:var(--re);font-family:var(--mo);font-size:10px">QA WARN</td></tr>
+          <tr style="border-top:1px solid var(--b)"><td style="padding:8px 14px;color:var(--td);font-family:var(--mo)">3</td><td style="padding:8px 14px;font-weight:600;color:var(--t)">Sin placeholders</td><td style="padding:8px 14px;color:var(--tm)">"proximamente" o "TODO:" en el texto</td><td style="padding:8px 14px;color:var(--re);font-family:var(--mo);font-size:10px">QA FAIL</td></tr>
+          <tr style="border-top:1px solid var(--b);background:rgba(255,255,255,.015)"><td style="padding:8px 14px;color:var(--td);font-family:var(--mo)">4</td><td style="padding:8px 14px;font-weight:600;color:var(--t)">Sin alert()</td><td style="padding:8px 14px;color:var(--tm)">uso de alert() nativo del browser</td><td style="padding:8px 14px;color:var(--re);font-family:var(--mo);font-size:10px">QA FAIL</td></tr>
+          <tr style="border-top:1px solid var(--b)"><td style="padding:8px 14px;color:var(--td);font-family:var(--mo)">5</td><td style="padding:8px 14px;font-weight:600;color:var(--t)">Null guards</td><td style="padding:8px 14px;color:var(--tm)">if(!el) o if (!el en el JS</td><td style="padding:8px 14px;color:var(--am);font-family:var(--mo);font-size:10px">QA WARN</td></tr>
+          <tr style="border-top:1px solid var(--b);background:rgba(255,255,255,.015)"><td style="padding:8px 14px;color:var(--td);font-family:var(--mo)">6</td><td style="padding:8px 14px;font-weight:600;color:var(--t)">HTML valido</td><td style="padding:8px 14px;color:var(--tm)">&lt;!DOCTYPE o &lt;html al inicio</td><td style="padding:8px 14px;color:var(--re);font-family:var(--mo);font-size:10px">QA FAIL</td></tr>
+          <tr style="border-top:1px solid var(--b)"><td style="padding:8px 14px;color:var(--td);font-family:var(--mo)">7</td><td style="padding:8px 14px;font-weight:600;color:var(--t)">Modales</td><td style="padding:8px 14px;color:var(--tm)">createElement o "modal" en el codigo</td><td style="padding:8px 14px;color:var(--am);font-family:var(--mo);font-size:10px">QA WARN</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- SOLID -->
+    <div style="font-size:10px;font-family:var(--mo);color:var(--td);letter-spacing:2px;margin-bottom:10px">ARQUITECTURA SOLID</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px;margin-bottom:20px">
+      <div style="background:var(--s2);border:1px solid var(--b);border-radius:8px;padding:12px">
+        <div style="font-size:20px;font-family:var(--se);font-weight:900;color:var(--or);margin-bottom:4px">S</div>
+        <div style="font-size:11px;font-weight:600;color:var(--t);margin-bottom:4px">Single Responsibility</div>
+        <div style="font-size:10px;color:var(--tm);line-height:1.6">7 servicios, uno por responsabilidad: <span style="font-family:var(--mo);font-size:9px;color:var(--cy)">ApiService</span> <span style="font-family:var(--mo);font-size:9px;color:var(--cy)">QAService</span> <span style="font-family:var(--mo);font-size:9px;color:var(--cy)">StateService</span> <span style="font-family:var(--mo);font-size:9px;color:var(--cy)">FileService</span> <span style="font-family:var(--mo);font-size:9px;color:var(--cy)">UIService</span> <span style="font-family:var(--mo);font-size:9px;color:var(--cy)">AgentRegistry</span> <span style="font-family:var(--mo);font-size:9px;color:var(--cy)">Orchestrator</span></div>
+      </div>
+      <div style="background:var(--s2);border:1px solid var(--b);border-radius:8px;padding:12px">
+        <div style="font-size:20px;font-family:var(--se);font-weight:900;color:var(--or);margin-bottom:4px">O</div>
+        <div style="font-size:11px;font-weight:600;color:var(--t);margin-bottom:4px">Open / Closed</div>
+        <div style="font-size:10px;color:var(--tm);line-height:1.6"><span style="font-family:var(--mo);font-size:9px;color:var(--cy)">AgentRegistry.register(new IAgent({...}))</span> para agregar agentes sin tocar el Orchestrator ni ningun otro modulo.</div>
+      </div>
+      <div style="background:var(--s2);border:1px solid var(--b);border-radius:8px;padding:12px">
+        <div style="font-size:20px;font-family:var(--se);font-weight:900;color:var(--or);margin-bottom:4px">L</div>
+        <div style="font-size:11px;font-weight:600;color:var(--t);margin-bottom:4px">Liskov Substitution</div>
+        <div style="font-size:10px;color:var(--tm);line-height:1.6">Todos los agentes son instancias de <span style="font-family:var(--mo);font-size:9px;color:var(--cy)">IAgent</span>. El Orchestrator puede usar cualquiera sin saber que agente especifico es.</div>
+      </div>
+      <div style="background:var(--s2);border:1px solid var(--b);border-radius:8px;padding:12px">
+        <div style="font-size:20px;font-family:var(--se);font-weight:900;color:var(--or);margin-bottom:4px">I</div>
+        <div style="font-size:11px;font-weight:600;color:var(--t);margin-bottom:4px">Interface Segregation</div>
+        <div style="font-size:10px;color:var(--tm);line-height:1.6"><span style="font-family:var(--mo);font-size:9px;color:var(--cy)">IAgent</span> solo expone <span style="font-family:var(--mo);font-size:9px;color:var(--cy)">run(messages)</span>. Interfaz minima, sin metodos innecesarios. El Orchestrator solo llama <span style="font-family:var(--mo);font-size:9px;color:var(--cy)">.run()</span>.</div>
+      </div>
+      <div style="background:var(--s2);border:1px solid var(--b);border-radius:8px;padding:12px">
+        <div style="font-size:20px;font-family:var(--se);font-weight:900;color:var(--or);margin-bottom:4px">D</div>
+        <div style="font-size:11px;font-weight:600;color:var(--t);margin-bottom:4px">Dependency Inversion</div>
+        <div style="font-size:10px;color:var(--tm);line-height:1.6"><span style="font-family:var(--mo);font-size:9px;color:var(--cy)">Orchestrator</span> depende de <span style="font-family:var(--mo);font-size:9px;color:var(--cy)">AgentRegistry</span>, <span style="font-family:var(--mo);font-size:9px;color:var(--cy)">QAService</span>, <span style="font-family:var(--mo);font-size:9px;color:var(--cy)">UIService</span>. Nunca de <span style="font-family:var(--mo);font-size:9px;color:var(--cy)">fetch()</span> ni de agentes concretos.</div>
+      </div>
+    </div>
+
+    <!-- BACKENDS -->
+    <div style="font-size:10px;font-family:var(--mo);color:var(--td);letter-spacing:2px;margin-bottom:10px">BACKENDS DISPONIBLES</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px">
+      <div style="background:var(--s2);border:1px solid var(--orb);border-radius:10px;padding:14px">
+        <div style="font-size:13px;font-weight:600;color:var(--or);margin-bottom:8px">☁ Anthropic API</div>
+        <div style="font-size:11px;color:var(--tm);line-height:1.8">
+          Modelos: Sonnet 4 · Opus 4 · Haiku 4.5<br>
+          Requiere: API key <span style="font-family:var(--mo);font-size:9px;color:var(--cy)">sk-ant-...</span><br>
+          Pros: mas preciso, mejores archivos grandes<br>
+          Contras: costo por token, requiere internet
+        </div>
+      </div>
+      <div style="background:var(--s2);border:1px solid rgba(46,232,122,.3);border-radius:10px;padding:14px">
+        <div style="font-size:13px;font-weight:600;color:var(--gr);margin-bottom:8px">🦙 Ollama local</div>
+        <div style="font-size:11px;color:var(--tm);line-height:1.8">
+          Modelos: cualquiera instalado localmente<br>
+          Requiere: <span style="font-family:var(--mo);font-size:9px;color:var(--cy)">OLLAMA_ORIGINS="*" ollama serve</span><br>
+          Pros: gratis, privado, sin internet<br>
+          Recomendado: <span style="font-family:var(--mo);font-size:9px;color:var(--cy)">qwen2.5-coder:7b</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- COMO USAR -->
+    <div style="font-size:10px;font-family:var(--mo);color:var(--td);letter-spacing:2px;margin-bottom:10px">COMO USAR EL SISTEMA</div>
+    <div style="background:var(--s2);border:1px solid var(--b);border-radius:10px;overflow:hidden;margin-bottom:24px">
+      <div style="padding:12px 14px;border-bottom:1px solid var(--b);display:flex;align-items:center;gap:10px">
+        <span style="font-size:13px;font-weight:600;font-family:var(--mo);color:var(--or)">01</span>
+        <div><div style="font-size:11px;font-weight:600;color:var(--t)">Configura el backend</div><div style="font-size:10px;color:var(--tm)">Ingresa tu API key de Anthropic — o activa Ollama con el comando de CORS</div></div>
+      </div>
+      <div style="padding:12px 14px;border-bottom:1px solid var(--b);display:flex;align-items:center;gap:10px">
+        <span style="font-size:13px;font-weight:600;font-family:var(--mo);color:var(--or)">02</span>
+        <div><div style="font-size:11px;font-weight:600;color:var(--t)">Escribe que construir</div><div style="font-size:10px;color:var(--tm)">Ej: "Construye el modulo ZytekOS CRM completo" o click en el Roadmap</div></div>
+      </div>
+      <div style="padding:12px 14px;border-bottom:1px solid var(--b);display:flex;align-items:center;gap:10px">
+        <span style="font-size:13px;font-weight:600;font-family:var(--mo);color:var(--or)">03</span>
+        <div><div style="font-size:11px;font-weight:600;color:var(--t)">El pipeline corre automaticamente</div><div style="font-size:10px;color:var(--tm)">Ves el progreso en tiempo real — cada agente se activa y muestra su resultado</div></div>
+      </div>
+      <div style="padding:12px 14px;border-bottom:1px solid var(--b);display:flex;align-items:center;gap:10px">
+        <span style="font-size:13px;font-weight:600;font-family:var(--mo);color:var(--or)">04</span>
+        <div><div style="font-size:11px;font-weight:600;color:var(--t)">QA automatico</div><div style="font-size:10px;color:var(--tm)">Si el Dev genera un archivo, el QA Engineer lo revisa antes de que puedas descargarlo</div></div>
+      </div>
+      <div style="padding:12px 14px;display:flex;align-items:center;gap:10px">
+        <span style="font-size:13px;font-weight:600;font-family:var(--mo);color:var(--or)">05</span>
+        <div><div style="font-size:11px;font-weight:600;color:var(--t)">Descarga el archivo</div><div style="font-size:10px;color:var(--tm)">Click en "Descargar" — el .html funciona directo en el browser sin servidor</div></div>
+      </div>
+    </div>
+
+  </div><!-- /panel-info -->
+
+  <div class="iw" id="iw-wrap">
+    <div class="qbs">
+      <button class="qb" onclick="q(this)">Construye ZytekOS CRM completo</button>
+      <button class="qb" onclick="q(this)">Genera ZytekOS FinTrack con dashboard</button>
+      <button class="qb" onclick="q(this)">Conecta inventario con POS al cobrar</button>
+      <button class="qb" onclick="q(this)">Agrega Chart.js a los reportes del admin</button>
+      <button class="qb" onclick="q(this)">Crea la landing page de Zytek LLC</button>
+      <button class="qb" onclick="q(this)">Audita el admin y dame mejoras</button>
+    </div>
+    <div class="ir">
+      <textarea class="ci" id="inp" rows="1" placeholder="Que construimos hoy?" onkeydown="onK(event)" oninput="rsz(this)"></textarea>
+      <button class="bs2" id="bsend" onclick="enviar()">&#x2192;</button>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+
+(async () => { // ZytekOS async license init
+// ════════════════════════════════════════════════════════════════
+//  ZYTEK OS v2.0 — CORE INTEGRATION
+//  Módulo: constructor
+// ════════════════════════════════════════════════════════════════
+
+// Detectar contexto de ejecución
+const _URL_PARAMS   = new URLSearchParams(window.location.search);
+const _FROM_SHELL   = _URL_PARAMS.get('fromShell') === '1';
+const _FROM_NEXT    = _URL_PARAMS.get('fromNext')  === '1';  // corriendo en Next.js iframe
+const _TENANT_NAME  = _URL_PARAMS.get('tenant') || 'Demo';
+const _TENANT_PLAN  = _URL_PARAMS.get('plan')   || 'pro';
+
+// Si viene de Next.js, la licencia ya fue validada por LicenseGate
+// Saltar la LicenseWall para no bloquear la pantalla de PIN
+const _Core = await ZytekCore.init('constructor', {
+  skipLicense: _FROM_NEXT || _FROM_SHELL
+});
+const _Bus  = _Core.EventBus;
+const _IDB  = _Core.IDB;
+const _Sync = _Core.SyncService;
+const _Reg  = _Core.ModuleRegistry;
+const _SS   = _Core.StateService;
+
+// Alias de compatibilidad — mantiene todas las llamadas existentes funcionando
+// Las funciones originales setText/setHtml/etc se preservan, el core las refuerza
+if(typeof setText==='undefined')   window.setText   = _Core.DOM.setText.bind(_Core.DOM);
+if(typeof setHtml==='undefined')   window.setHtml   = _Core.DOM.setHtml.bind(_Core.DOM);
+if(typeof setDisp==='undefined')   window.setDisp   = _Core.DOM.setDisp.bind(_Core.DOM);
+if(typeof openModal==='undefined') window.openModal = _Core.DOM.openModal.bind(_Core.DOM);
+if(typeof closeModal==='undefined')window.closeModal= _Core.DOM.closeModal.bind(_Core.DOM);
+if(typeof flash==='undefined')     window.flash     = _Core.DOM.flash.bind(_Core.DOM);
+if(typeof money==='undefined')     window.money     = _Core.Fmt.money.bind(_Core.Fmt);
+if(typeof tb==='undefined')        window.tb        = _Core.Fmt.tb.bind(_Core.Fmt);
+if(typeof badge==='undefined')     window.badge     = _Core.Fmt.badge.bind(_Core.Fmt);
+if(typeof genId==='undefined')     window.genId     = _Core.Fmt.genId.bind(_Core.Fmt);
+
+// Escuchar eventos entrantes del shell (cuando corre en iframe)
+window.addEventListener('message', e => {
+  if(!e.data?.zytek) return;
+  _Bus._dispatch(e.data);
+});
+
+// Re-publicar eventos del bus hacia el shell
+const _origBusEmit = _Bus.emit.bind(_Bus);
+_Bus.emit = function(event, payload, persist) {
+  _origBusEmit(event, payload, persist);
+  if(window.parent !== window) {
+    try { window.parent.postMessage({ zytek:true, event, payload }, '*'); } catch(_){}
+  }
+};
+
+"use strict";
+// ================================================================
+// ZYTEKOS CONSTRUCTOR - SOLID + QA ARCHITECTURE
+// S: ApiService / QAService / StateService / FileService / UIService
+// O: AgentRegistry.register() - extensible sin modificar el core
+// L: IAgent - todos los agentes son intercambiables
+// I: IAgent solo expone run() - interfaz minima
+// D: Orchestrator depende de abstracciones no de implementaciones
+// ================================================================
+
+// Backend config — se actualiza dinámicamente
+const BACKENDS = {
+  anthropic: {
+    name: "Anthropic",
+    defaultModel: "claude-sonnet-4-20250514",
+    models: ["claude-sonnet-4-20250514","claude-opus-4-20250514","claude-haiku-4-5-20251001"],
+    url: "https://api.anthropic.com/v1/messages"
+  },
+  ollama: {
+    name: "Ollama (local)",
+    defaultModel: "llama3.2",
+    models: [],          // se cargan dinámicamente desde /api/tags
+    url: "http://localhost:11434/api/chat"
+  }
+};
+let ACTIVE_BACKEND = "anthropic";
+let ACTIVE_MODEL   = "claude-sonnet-4-20250514";
+
+const CTX = `=== IDENTIDAD ===
+ZytekOS Suite SaaS ERP por Zytek LLC. Daniel Fornerino. Summerville SC. Abril 2026.
+
+=== ARCHIVOS ENTREGADOS ===
+zytek-admin.html         479KB 7965 lineas 255 funciones 23 modales 0 placeholders
+zytek-pos-restaurant.html 303KB 5691 lineas 214 funciones POS completo
+zytek-pos-mesero.html    283KB 5326 lineas app mesero movil touch-first
+zytek-kds.html            28KB  694 lineas Kitchen Display System
+zytek-pos-retail.html     89KB 1316 lineas POS Retail v1
+zytek-landing-pro.html    32KB  759 lineas Landing ZytekOS Pro
+
+=== ADMIN 8 MODULOS COMPLETOS ===
+Menu Ventas: categorias subgrupos items modificadores recetas food-cost live
+Compras: proveedores CxP OC devoluciones todos los modales funcionales
+Inventario: catalogo almacen ajustes conteo movimientos modal registrar movimiento
+Reportes: 48 reportes R01-R48 en 9 categorias con dashboards y filtros globales
+Clientes: CxC abonos adelantos leads-kanban fidelizacion todos los modales
+IA: 10 agentes inventario+ventas con chat libre y contexto real
+Sistema: usuarios permisos auditoria
+Config: metodos-pago gestor-completo IVA+IGTF POS BCV
+
+=== DATOS TECNICOS ===
+Admin PIN: 1369 usuario: dfornerino
+INV_STOCK: [{id,nom,cat,stock,min,uni,costo,ubicacionId}] 28 productos
+CLI_DATA: {clientes,cxc,abonos,adelantos,leads,canjes}
+COMPRAS_DEMO: {proveedores,cxp,pagos,ordenes,insumos,costos,devoluciones,notas,calidad}
+REP_DEMO: {formasPago,turnos,horas,ambientes,meseros,platos,categorias,tendencia}
+UBICACIONES: camara-fria almacen-seco congelado barra cocina
+localStorage key: zytek_formas_pago
+Supabase: https://oufrhjvfefbmzcnkgvrm.supabase.co
+
+=== CSS DESIGN SYSTEM ===
+--bg:#0a0d12 --s1/#surface:#111520 --s2/#surface2:#181e2e --s3:#1e2640
+--or/#orange:#ff7c20 --gr/#green:#2ee87a --cy/#cyan:#00d4ff
+--am/#amber:#ffc040 --re/#red:#ff4d4d
+--t/#text:#f0f2f7 --tm:#8b93a8 --td:#4a5166
+--b:rgba(255,255,255,.07) --b2:rgba(255,255,255,.14)
+Fonts: DM Sans (body) Fraunces (display) DM Mono (code)
+
+=== FUNCIONES CLAVE DEL SISTEMA ===
+showSection(el,id) navCompras(el,sub) navInventario(el,sub) navClientes(el,sub)
+setRepCat(cat,btn) setInvSub(sub) setRepSub(sub)
+renderInvCatalogo() renderAlmacen() renderMovimientos()
+renderCompras() renderProveedores() renderCxP()
+renderClienteDirectorio() renderCxCClientes() renderFidelizacion()
+flash(msg,color) money(n) tb(rows) badge(txt,cls)
+Modal pattern: document.createElement div con overlay fixed z-index:900
+
+=== PENDIENTE PRIORIDAD ALTA ===
+1. descontarStockPorVenta(itemId,cantidad) conectar inventario con POS al cobrar
+2. IGTF 1.5% real en calculos del cobro POS
+3. Chart.js en dashboards Reportes: ventas 7d linea, formas-pago donut, food-cost barra
+4. ZytekOS POS Retail completo
+
+=== PENDIENTE PROXIMA FASE ===
+5. ZytekOS CRM (no iniciado)
+6. ZytekOS FinTrack (no iniciado)
+7. Landing Zytek LLC (no iniciado)
+8. Backend Supabase
+9. Tickets termicos ESC/POS
+10. App movil PWA
+
+=== OTROS PROYECTOS ===
+PROCAR: React/Vite C:\dealer-finance-app Zustand+Anthropic SDK dealer-finance-analyzer
+OANDA: Python C:\Users\dforn\...\oanda_bot cuenta 101-001-37042756-001 PRACTICE mode
+ProQuality: proqualityadvisory.com Next.js+Supabase+AWS-Amplify ENTREGADO
+Portfolio: VDE $1k NVDA $900 XOM $400 total ~$2300
+
+=== REGLAS DEL PROYECTO ===
+1. CSS vars del sistema NUNCA hardcode colors
+2. DM Sans+Fraunces+DM Mono NUNCA Arial/Inter/Roboto
+3. Null guards en TODAS las funciones DOM: if(!el) return;
+4. CERO placeholders CERO alert() nativo CERO TODO:
+5. Modales con document.createElement overlay fixed z-index:900
+6. flash() para notificaciones tb() para tablas money() para formato
+7. Funciones menor-o-igual-30 lineas una responsabilidad por funcion`;
+
+const ROADMAP = [
+  {id:"pos-rest",  label:"Restaurant POS",       s:"d", c:"var(--gr)"},
+  {id:"mesero",    label:"POS Mesero Movil",      s:"d", c:"var(--gr)"},
+  {id:"kds",       label:"KDS Cocina",            s:"d", c:"var(--gr)"},
+  {id:"admin",     label:"Admin Panel ERP",       s:"d", c:"var(--gr)"},
+  {id:"inv-pos",   label:"Inventario con POS",    s:"p", c:"var(--am)"},
+  {id:"igtf",      label:"IGTF real en POS",      s:"p", c:"var(--am)"},
+  {id:"charts",    label:"Charts en Reportes",    s:"p", c:"var(--am)"},
+  {id:"pos-retail",label:"POS Retail completo",   s:"n", c:"var(--td)"},
+  {id:"crm",       label:"ZytekOS CRM",           s:"n", c:"var(--td)"},
+  {id:"fintrack",  label:"ZytekOS FinTrack",      s:"n", c:"var(--td)"},
+  {id:"landing",   label:"Landing Zytek LLC",     s:"n", c:"var(--td)"},
+  {id:"backend",   label:"Backend Supabase",      s:"n", c:"var(--td)"},
+  {id:"procar",    label:"PROCAR Analyzer",       s:"p", c:"var(--am)"},
+  {id:"oanda",     label:"OANDA Bot",             s:"p", c:"var(--am)"},
+];
+const RM_BUILD = {
+  "inv-pos":   "Genera la funcion descontarStockPorVenta() para conectar inventario con POS",
+  "igtf":      "Implementa el calculo IGTF 1.5% real en el cobro del POS",
+  "charts":    "Agrega Chart.js a los dashboards de Reportes (ventas, formas de pago, food cost)",
+  "pos-retail":"Construye ZytekOS POS Retail completo con SKU inventario y cobro",
+  "crm":       "Construye el modulo ZytekOS CRM completo desde cero",
+  "fintrack":  "Construye ZytekOS FinTrack tracker financiero con dashboard",
+  "landing":   "Construye la landing page completa de Zytek LLC",
+};
+
+// ================================================================
+// S - ApiService: UNICA responsabilidad = comunicacion con la API
+// ================================================================
+// ================================================================
+// S - ApiService: UNICA responsabilidad = comunicacion con el backend
+//     Soporta Anthropic API y Ollama local transparentemente
+// ================================================================
+const ApiService = {
+  async call(agent, messages) {
+    return ACTIVE_BACKEND === "ollama"
+      ? this._callOllama(agent, messages)
+      : this._callAnthropic(agent, messages);
+  },
+
+  // ── Anthropic Claude API ──────────────────────────────────────
+  async _callAnthropic(agent, messages) {
+    const resp = await fetch(BACKENDS.anthropic.url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": StateService.apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({
+        model:      ACTIVE_MODEL,
+        max_tokens: agent.maxTokens || 1200,
+        system:     agent.sp,
+        messages:   this._normalizeMessages(messages)
+      })
+    });
+    const d = await resp.json();
+    if (d.error) throw new Error("["+agent.name+"] "+d.error.message);
+    return d.content?.filter(b=>b.type==="text").map(b=>b.text).join("\n") || "";
+  },
+
+  // ── Ollama local API (/api/chat — OpenAI compatible) ─────────
+  async _callOllama(agent, messages) {
+    // Ollama usa messages con system incorporado
+    const ollamaMessages = [
+      { role: "system", content: agent.sp },
+      ...this._normalizeMessages(messages)
+    ];
+    const resp = await fetch(BACKENDS.ollama.url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model:  ACTIVE_MODEL,
+        stream: false,
+        options: { num_predict: agent.maxTokens || 1200, temperature: 0.7 },
+        messages: ollamaMessages
+      })
+    });
+    if (!resp.ok) {
+      const err = await resp.text().catch(()=>"");
+      throw new Error("["+agent.name+"] Ollama error "+resp.status+": "+err.slice(0,120));
+    }
+    const d = await resp.json();
+    return d.message?.content || d.choices?.[0]?.message?.content || "";
+  },
+
+  // ── Obtener modelos disponibles en Ollama ────────────────────
+  async fetchOllamaModels() {
+    try {
+      const r = await fetch("http://localhost:11434/api/tags");
+      if (!r.ok) return [];
+      const d = await r.json();
+      return (d.models || []).map(m => m.name);
+    } catch(_) { return []; }
+  },
+
+  _normalizeMessages(messages) {
+    return messages.map(m => ({
+      role:    m.role,
+      content: typeof m.content === "string" ? m.content : JSON.stringify(m.content)
+    }));
+  }
+};
+
+// ================================================================
+// S - QAService: UNICA responsabilidad = validacion y extraccion
+// ================================================================
+const QAService = {
+  parsePlan(raw) {
+    try {
+      const p = JSON.parse(raw.replace(/```json|```/g,"").trim());
+      if (!p?.plan?.pasos || !Array.isArray(p.plan.pasos)) return null;
+      if (!p.plan.descripcion) return null;
+      if (!p.plan.pasos.every(x=>x.agente&&x.tarea)) return null;
+      return p;
+    } catch(_) { return null; }
+  },
+
+  extractFile(text) {
+    const m = text.match(/===ARCHIVO_INICIO:([^\n=]+)===\s*([\s\S]*?)===ARCHIVO_FIN===/);
+    if (!m) return null;
+    const nombre = m[1].trim();
+    const contenido = m[2].trim();
+    return { nombre, contenido, kb: Math.round(contenido.length/1024), lines: contenido.split("\n").length, qa: this.check(contenido) };
+  },
+
+  check(code) {
+    const C = [
+      {id:"css",    ok: code.includes("--or") || code.includes("--surface") || code.includes("--bg"),     lbl:"CSS vars del sistema"},
+      {id:"fonts",  ok: code.includes("DM Sans") || code.includes("DM+Sans") || code.includes("Fraunces"),lbl:"Tipografia correcta"},
+      {id:"nohold", ok: !code.includes("proximamente") && !code.includes("TODO:"),                         lbl:"Sin placeholders"},
+      {id:"noalert",ok: !code.includes("alert("),                                                           lbl:"Sin alert() nativo"},
+      {id:"nullg",  ok: code.includes("if(!") || code.includes("if (!"),                                   lbl:"Null guards presentes"},
+      {id:"html",   ok: code.includes("<!DOCTYPE") || code.includes("<html"),                              lbl:"HTML valido"},
+      {id:"modal",  ok: code.includes("createElement") || code.includes("modal"),                          lbl:"Modales con createElement"},
+    ];
+    const f = C.filter(c=>!c.ok);
+    return {
+      score: C.filter(c=>c.ok).length, total: C.length,
+      failed: f,
+      verdict: f.length===0?"PASS":f.length<=2?"WARN":"FAIL"
+    };
+  }
+};
+
+// ================================================================
+// S - StateService: UNICA responsabilidad = estado de la app
+// ================================================================
+const StateService = {
+  hist: [], files: [], busy: false, apiKey: "",
+  ollamaReady: false,
+  push(role, content) {
+    this.hist.push({role, content});
+    if (this.hist.length > 24) this.hist = this.hist.slice(-24);
+  },
+  recent(n=6) { return this.hist.slice(-n); },
+  addFile(f)  { this.files = this.files.filter(x=>x.nombre!==f.nombre); this.files.push(f); },
+  reset()     { this.hist=[]; this.files=[]; this.busy=false; }
+};
+
+// ================================================================
+// S - FileService: UNICA responsabilidad = manejo de archivos
+// ================================================================
+const FileService = {
+  download(nombre, contenido) {
+    if (!contenido) { UIService.sys("Archivo no encontrado"); return; }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([contenido],{type:"text/html;charset=utf-8"}));
+    a.download = nombre;
+    a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 800);
+    UIService.sys("Descargando: "+nombre+" ("+Math.round(contenido.length/1024)+"KB)");
+  },
+  preview(nombre, contenido) {
+    if (!contenido) { UIService.sys("Archivo no encontrado"); return; }
+    const w = window.open("","_blank");
+    if (!w) { UIService.sys("Permite popups para preview"); return; }
+    w.document.write(contenido); w.document.close();
+  },
+  get(nombre) { return StateService.files.find(f=>f.nombre===nombre)||null; }
+};
+
+// ================================================================
+// S - UIService: UNICA responsabilidad = manipulacion del DOM
+// ================================================================
+const UIService = {
+  _n: 0,
+  _fmt(t) {
+    return (t||"")
+      .replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>")
+      .replace(/`([^`]+)`/g,"<code style=\"background:var(--s3);padding:1px 4px;border-radius:3px;font-family:var(--mo);font-size:10px\">$1</code>")
+      .replace(/\n/g,"<br>");
+  },
+  _scroll() { const c=document.getElementById("chat"); if(c) c.scrollTop=c.scrollHeight; },
+  _ap(type, sender, html) {
+    const chat=document.getElementById("chat"); if(!chat) return null;
+    const id="m"+(++this._n);
+    const div=document.createElement("div");
+    div.className="msg "+type; div.id=id;
+    if (type==="system") {
+      div.innerHTML="<div class=\"bb\">&#x26A1; "+html+"</div>";
+    } else {
+      const col=type==="user"?"var(--or)":type==="agent"?"var(--cy)":"var(--tm)";
+      div.innerHTML=(sender?"<div class=\"mh\" style=\"color:"+col+"\">"+sender+"</div>":"")+"<div class=\"bb\">"+html+"</div>";
+    }
+    chat.appendChild(div); this._scroll(); return id;
+  },
+  sys(t)               { return this._ap("system",null,t); },
+  think(t)             { return this._ap("thinking",null,this._fmt(t)); },
+  user(t)              { return this._ap("user","Tu",this._fmt(t)); },
+  asst(sender, t)      { return this._ap("assistant",sender,this._fmt(t)); },
+  rm(id)               { document.getElementById(id)?.remove(); },
+  prog(p)              { const el=document.getElementById("prog"); if(el) el.style.width=p+"%"; },
+  agResult(ag, tarea, text, file) {
+    const chat=document.getElementById("chat"); if(!chat) return;
+    const div=document.createElement("div");
+    div.className="msg agent"; div.style.maxWidth="94%";
+    const display=text
+      .replace(/===ARCHIVO_INICIO:[^\n=]+=== [\s\S]*?===ARCHIVO_FIN===/g,
+        file?"[Archivo generado: "+file.nombre+" "+file.kb+"KB "+file.lines+" lineas]":"")
+      .replace(/\*\*(.*?)\*\*/g,"<strong style=\"color:var(--t)\">$1</strong>")
+      .replace(/`([^`]+)`/g,"<code style=\"background:var(--s3);padding:1px 4px;border-radius:3px;font-family:var(--mo);font-size:10px\">$1</code>")
+      .replace(/\n/g,"<br>");
+    let qb="";
+    if (file?.qa) {
+      const v=file.qa.verdict;
+      const cls=v==="PASS"?"qp":v==="WARN"?"qw":"qf";
+      const ic=v==="PASS"?"QA PASS":v==="WARN"?"QA WARN":"QA FAIL";
+      qb="<div style=\"margin-top:6px\"><span class=\""+cls+"\">"+ic+" "+file.qa.score+"/"+file.qa.total+"</span></div>";
+    }
+    const foot=file?"<div class=\"rcf\"><div class=\"fm\">"+file.nombre+" "+file.kb+"KB "+file.lines+" lineas</div><button class=\"bpv\" onclick=\"FileService.preview('"+file.nombre+"',FileService.get('"+file.nombre+"')?.contenido)\">Preview</button><button class=\"bdl\" onclick=\"FileService.download('"+file.nombre+"',FileService.get('"+file.nombre+"')?.contenido)\">Descargar</button></div>":"";
+    div.innerHTML="<div class=\"mh\"><span style=\"color:"+ag.color+"\">"+ag.ico+" "+ag.name+"</span><span style=\"color:var(--td);font-size:10px\"> &mdash; "+tarea+"</span></div><div class=\"rc\"><div class=\"rch\" style=\"border-left:3px solid "+ag.color+"\">"+ag.ico+" "+ag.name+"</div><div class=\"rcb\">"+display+qb+"</div>"+foot+"</div>";
+    chat.appendChild(div); this._scroll();
+  },
+  astatus(id, s) {
+    const el=document.getElementById("st-"+id);
+    const card=document.getElementById("ac-"+id);
+    if (!el) return;
+    const L={idle:"listo",running:"ejecutando",done:"OK",error:"error",qa:"QA..."};
+    const C={idle:"si",running:"sr",done:"sd",error:"se",qa:"sq"};
+    el.className="ast "+(C[s]||"si");
+    el.textContent=L[s]||s;
+    if (card) {
+      card.classList.remove("st-r","st-d","st-e");
+      if (s==="running"||s==="qa") card.classList.add("st-r");
+      if (s==="done") card.classList.add("st-d");
+      if (s==="error") card.classList.add("st-e");
+    }
+  },
+  pshow(steps) {
+    const wrap=document.getElementById("pw");
+    const vis=document.getElementById("pv");
+    if (!wrap||!vis) return;
+    wrap.style.display="block";
+    vis.innerHTML=steps.map((s,i)=>(i>0?"<div class=\"pa\"></div>":"")+"<div class=\"ps\"><div class=\"psi\" id=\"pip-"+s.id+"\">"+s.ico+"</div><div class=\"psl\">"+s.label+"</div></div>").join("");
+  },
+  pstatus(id, s) {
+    const el=document.getElementById("pip-"+id);
+    if (!el) return;
+    el.classList.remove("running","done","error","qa");
+    if (s) el.classList.add(s);
+  },
+  rfFiles() {
+    const fc=document.getElementById("fc");
+    const fp=document.getElementById("fpanel");
+    const files=StateService.files;
+    if (fc) fc.textContent=files.length>0?files.length+" archivo"+(files.length>1?"s":"")+" generado"+(files.length>1?"s":""):"Ninguno aun";
+    if (!fp) return;
+    fp.innerHTML=files.length===0?"":files.map((f,i)=>"<div class=\"fpi\"><div style=\"flex:1;min-width:0\"><div style=\"font-size:10px;font-weight:600;color:var(--t);white-space:nowrap;overflow:hidden;text-overflow:ellipsis\">"+f.nombre+"</div><div style=\"font-size:9px;font-family:var(--mo);color:"+(f.qa?.verdict==="PASS"?"var(--gr)":f.qa?.verdict==="WARN"?"var(--am)":"var(--td)")+"\">"+f.kb+"KB "+(f.qa?.verdict||"")+"</div></div><button class=\"bdl\" style=\"padding:3px 9px;font-size:9px\" onclick=\"FileService.download(StateService.files["+i+"].nombre,StateService.files["+i+"].contenido)\">DL</button></div>").join("");
+  },
+  resetSt() {
+    setTimeout(()=>{
+      AgentRegistry.all().forEach(ag=>{
+        this.astatus(ag.id,"idle");
+        document.getElementById("ac-"+ag.id)?.classList.remove("st-r","st-d","st-e");
+      });
+    },3500);
+  }
+};
+
+// ================================================================
+// L - IAgent: contrato base (Liskov: subclases son intercambiables)
+// I - Solo expone run() (Interface Segregation)
+// ================================================================
+class IAgent {
+  constructor({id, name, ico, color, maxTokens, sp}) {
+    if (!id||!name||!sp) throw new Error("IAgent: campos requeridos faltantes ["+id+"]");
+    this.id=id; this.name=name; this.ico=ico||"?"; this.color=color||"var(--tm)";
+    this.maxTokens=maxTokens||1200; this.sp=sp;
+  }
+  // D: depende de ApiService (abstraccion), no de fetch directamente
+  async run(messages) { return ApiService.call(this, messages); }
+}
+
+// ================================================================
+// O - AgentRegistry: abierto a extension, cerrado a modificacion
+// Para agregar un agente: AgentRegistry.register(new IAgent({...}))
+// ================================================================
+const AgentRegistry = {
+  _r: {},
+  register(ag) {
+    if (!(ag instanceof IAgent)) throw new TypeError("Solo instancias de IAgent");
+    this._r[ag.id]=ag; return this;
+  },
+  get(id)  { if (!this._r[id]) throw new Error("Agente '"+id+"' no registrado"); return this._r[id]; },
+  has(id)  { return !!this._r[id]; },
+  all()    { return Object.values(this._r); }
+};
+
+const SP_DEV_PROTO = `Cuando generes un modulo o archivo HTML usa EXACTAMENTE este delimitador:
+===ARCHIVO_INICIO:nombre.html===
+[CODIGO HTML COMPLETO AQUI]
+===ARCHIVO_FIN===
+
+CHECKLIST QA (el QA Engineer verificara):
+- CSS vars del sistema (--or, --gr, --cy, --am, --t, --b, etc.) NUNCA colores hardcoded
+- Google Fonts DM Sans + Fraunces + DM Mono NUNCA Arial/Inter/Roboto
+- Null guards: if(!el) return; en CADA funcion DOM
+- CERO placeholders CERO alert() CERO TODO:
+- Modales: document.createElement + overlay fixed z-index:900
+- flash() notificaciones tb() tablas money() formato`;
+
+AgentRegistry
+  .register(new IAgent({id:"orq",name:"Orquestador",ico:"&#x1F9E0;",color:"var(--or)",maxTokens:800,
+    sp:CTX+`
+
+Eres el ORQUESTADOR. Analiza y planifica. Si la peticion pide GENERAR/CONSTRUIR/CREAR codigo incluye agente "dev" con genera_archivo:true.
+Responde SOLO en JSON valido:
+{"plan":{"descripcion":"...","pasos":[{"agente":"anl|dis|dev|qa|val|doc","tarea":"especifica","genera_archivo":false,"nombre_archivo":"zytek-xxx.html"}]},"resumen_ejecutivo":"...","siguiente_accion":""}
+Se especifico. Cita funciones reales del contexto.`
+  }))
+  .register(new IAgent({id:"anl",name:"Analista",ico:"&#x1F50D;",color:"var(--bl)",maxTokens:1000,
+    sp:CTX+`
+
+Eres el ANALISTA. Auditas codigo detectas gaps con impacto CRITICO/ALTO/MEDIO/BAJO.
+Cita funciones reales: renderCompras setRepCat abrirModalProducto etc.
+Formato: ANALISIS -> GAPS (con impacto) -> RECOMENDACIONES (con nombres de funcion)`
+  }))
+  .register(new IAgent({id:"dis",name:"Disenador UX",ico:"&#x1F3A8;",color:"var(--pu)",maxTokens:800,
+    sp:CTX+`
+
+Eres el DISENADOR UX. Defines flujos IDs de componentes y experiencia.
+Mobile-first (touch target minimo 44px). Consistente con el design system.
+Formato: FLUJO (pasos numerados) -> COMPONENTES (con IDs DOM) -> CONSIDERACIONES UX`
+  }))
+  .register(new IAgent({id:"dev",name:"Desarrollador",ico:"&#x2699;&#xFE0F;",color:"var(--cy)",maxTokens:4000,
+    sp:CTX+`
+
+Eres el DESARROLLADOR. Generas codigo COMPLETO y FUNCIONAL.
+`+SP_DEV_PROTO
+  }))
+  .register(new IAgent({id:"qa",name:"QA Engineer",ico:"&#x1F9EA;",color:"var(--am)",maxTokens:1200,
+    sp:CTX+`
+
+Eres el QA ENGINEER. Revision de calidad EXHAUSTIVA.
+
+CHECKLIST (PASS/FAIL por item):
+[ ] CSS vars del sistema usadas
+[ ] Tipografia correcta DM Sans/Fraunces/DM Mono
+[ ] Null guards en funciones DOM
+[ ] Sin placeholders ni TODO
+[ ] Sin alert() nativo usa flash()
+[ ] Modales con createElement
+[ ] Sin funciones o IDs duplicados
+[ ] Funciones navegacion correctas (showSection navCompras etc)
+[ ] Variables de datos correctas (INV_STOCK CLI_DATA COMPRAS_DEMO)
+[ ] Try/catch donde puede fallar
+[ ] HTML valido
+[ ] Responsive mobile-friendly
+
+Formato:
+RESULTADO: PASS | WARN | FAIL
+CHECKLIST: [item: PASS/FAIL]
+BUGS CRITICOS: [lista]
+BUGS MENORES: [lista]
+CORRECCIONES: [codigo exacto]`
+  }))
+  .register(new IAgent({id:"val",name:"Validador",ico:"&#x2705;",color:"var(--gr)",maxTokens:800,
+    sp:CTX+`
+
+Eres el VALIDADOR. Verificas logica y correccion funcional.
+La implementacion hace lo que se pidio? Hay edge cases sin cubrir?
+Formato: VALIDACION FUNCIONAL -> EDGE CASES -> CORRECCIONES`
+  }))
+  .register(new IAgent({id:"doc",name:"Documentador",ico:"&#x1F4CB;",color:"var(--or)",maxTokens:800,
+    sp:CTX+`
+
+Eres el DOCUMENTADOR. Generas specs y documentacion tecnica.
+Incluye: que se hizo como integrar archivos afectados siguientes pasos.
+Formato claro tecnico y accionable.`
+  }));
+
+// ================================================================
+// D - Orchestrator: depende de abstracciones no de implementaciones
+// AgentRegistry QAService StateService UIService FileService
+// ================================================================
+const Orchestrator = {
+  async run(userMsg) {
+    if (StateService.busy) return;
+    if (ACTIVE_BACKEND === "anthropic" && !StateService.apiKey) {
+      UIService.sys("Ingresa tu API key de Anthropic — o cambia a Ollama en la barra superior");
+      document.getElementById("api-key-input")?.focus();
+      return;
+    }
+    if (ACTIVE_BACKEND === "ollama" && !StateService.ollamaReady) {
+      UIService.sys("Ollama no detectado en localhost:11434 — verifica que este corriendo");
+      return;
+    }
+    StateService.busy=true;
+    document.getElementById("bsend").disabled=true;
+    UIService.user(userMsg);
+    StateService.push("user",userMsg);
+    UIService.astatus("orq","running");
+    UIService.prog(10);
+    const tid=UIService.think("Orquestador planificando...");
+    try {
+      // FASE 1: PLANIFICACION
+      const orq=AgentRegistry.get("orq");
+      const planRaw=await orq.run(StateService.recent(6));
+      UIService.rm(tid);
+      UIService.astatus("orq","done");
+      const plan=QAService.parsePlan(planRaw);
+      if (!plan) {
+        StateService.push("assistant",planRaw);
+        UIService.asst("Orquestador",planRaw);
+        UIService.prog(100);
+        this._done(); return;
+      }
+      const pasos=plan.plan.pasos;
+      UIService.pshow([{id:"orq",label:"Orquestador",ico:"&#x1F9E0;"},
+        ...pasos.map(p=>{const ag=AgentRegistry.has(p.agente)?AgentRegistry.get(p.agente):null;return{id:p.agente,label:ag?.name||p.agente,ico:ag?.ico||"?"};})]);
+      UIService.prog(18);
+      UIService.asst("Orquestador",
+        "**"+plan.plan.descripcion+"**
+
+"+
+        pasos.map((p,i)=>{const ag=AgentRegistry.has(p.agente)?AgentRegistry.get(p.agente):null;return(i+1)+". "+(ag?.ico||"")+" **"+(ag?.name||p.agente)+"** -> "+p.tarea;}).join("
+"));
+      // FASE 2: EJECUCION
+      const results={};
+      const step=55/Math.max(pasos.length,1);
+      for (let i=0;i<pasos.length;i++) {
+        const paso=pasos[i];
+        if (!AgentRegistry.has(paso.agente)) continue;
+        const agent=AgentRegistry.get(paso.agente);
+        UIService.pstatus(paso.agente,"running");
+        UIService.astatus(paso.agente,"running");
+        UIService.prog(18+(i+1)*step);
+        const thId=UIService.think(agent.name+" ejecutando...");
+        try {
+          const ctx=[...StateService.recent(4),
+            {role:"user",content:"TAREA: "+paso.tarea+"
+PLAN: "+plan.plan.descripcion+"
+PREVIOS: "+JSON.stringify(Object.entries(results).map(([k,v])=>({ag:k,r:v.slice(0,180)}))).slice(0,800)}];
+          const result=await agent.run(ctx);
+          results[paso.agente]=result;
+          UIService.rm(thId);
+          UIService.pstatus(paso.agente,"done");
+          UIService.astatus(paso.agente,"done");
+          const file=QAService.extractFile(result);
+          if (file) { StateService.addFile(file); UIService.rfFiles(); }
+          UIService.agResult(agent,paso.tarea,result,file);
+          // QA AUTO despues del dev
+          if (paso.agente==="dev"&&file) await this._qa(file);
+        } catch(err) {
+          UIService.rm(thId);
+          UIService.pstatus(paso.agente,"error");
+          UIService.astatus(paso.agente,"error");
+          UIService.asst(agent.name,"Error: "+err.message);
+        }
+      }
+      // FASE 3: CONSOLIDACION
+      UIService.prog(92);
+      UIService.pstatus("orq","done");
+      const cid=UIService.think("Consolidando...");
+      const res=Object.entries(results).map(([k,v])=>({ag:AgentRegistry.has(k)?AgentRegistry.get(k).name:k,r:v.replace(/===ARCHIVO_INICIO:[^\n=]+=== [\s\S]*?===ARCHIVO_FIN===/g,"[ARCHIVO]").slice(0,280)}));
+      const consolidCtx=[...StateService.recent(3),
+        {role:"user",content:"Resume en 3-4 lineas: que se hizo, archivos generados, siguiente paso. Resultados: "+JSON.stringify(res)}];
+      const summary=await AgentRegistry.get("orq").run(consolidCtx);
+      UIService.rm(cid);
+      StateService.push("assistant",summary);
+      UIService.asst("Orquestador",summary);
+      UIService.prog(100);
+    } catch(err) {
+      UIService.rm(tid);
+      UIService.astatus("orq","error");
+      UIService.asst("Sistema","Error global: "+err.message);
+      UIService.prog(0);
+    }
+    this._done();
+  },
+  async _qa(file) {
+    if (!AgentRegistry.has("qa")) return;
+    try {
+      const qa=AgentRegistry.get("qa");
+      UIService.astatus("qa","qa");
+      UIService.pstatus("qa","qa");
+      const qtid=UIService.think("QA Engineer revisando "+file.nombre+"...");
+      const qr=await qa.run([{role:"user",content:"Revisa '"+file.nombre+"' ("+file.kb+"KB "+file.lines+" lineas).
+Codigo primeros 3000 chars:
+"+file.contenido.slice(0,3000)+"
+Checks locales: "+JSON.stringify(file.qa)}]);
+      UIService.rm(qtid);
+      UIService.astatus("qa","done");
+      UIService.pstatus("qa","done");
+      UIService.agResult(qa,"QA sobre "+file.nombre,qr,null);
+    } catch(_) { UIService.astatus("qa","error"); }
+  },
+  _done() {
+    UIService.resetSt();
+    setTimeout(()=>UIService.prog(0),2500);
+    StateService.busy=false;
+    document.getElementById("bsend").disabled=false;
+  }
+};
+
+// ================================================================
+// FUNCIONES GLOBALES DE UI
+// ================================================================
+function init() {
+  renderRM();
+  UIService.sys("SOLID + QA PIPELINE activo | 7 agentes registrados | Contexto ZytekOS completo");
+  UIService.asst("Orquestador",
+    "Hola Daniel! Sistema listo con arquitectura **SOLID** y **QA automatico**.
+
+"+
+    "Pipeline: Analista -> UX -> Dev -> **QA auto** -> Validador -> Docs
+
+"+
+    "El QA Engineer revisa automaticamente cada archivo con 7 checks antes de que descargues.
+
+"+
+    "Click en cualquier item del roadmap para construirlo. Que hacemos?");
+  UIService.rfFiles();
+}
+
+function renderRM() {
+  const el=document.getElementById("rmlist"); if (!el) return;
+  const SC={d:"rs-d",p:"rs-p",n:"rs-n"};
+  const SL={d:"listo",p:"en curso",n:"pendiente"};
+  el.innerHTML=ROADMAP.map(r=>
+    "<div class=\"rmi\" onclick=\"buildRM('"+r.id+"','"+r.label.replace(/'/g,"")+"')\">"+
+    "<div class=\"rmd\" style=\"background:"+r.c+"\"></div>"+
+    "<span style=\"flex:1;color:var(--tm);white-space:nowrap;overflow:hidden;text-overflow:ellipsis\">"+r.label+"</span>"+
+    "<span class=\"rms "+(SC[r.s]||"rs-n")+"\">"+SL[r.s]+"</span></div>"
+  ).join("");
+}
+
+async function enviar() {
+  const el=document.getElementById("inp");
+  const msg=el?.value.trim();
+  if (!msg) return;
+  el.value=""; rsz(el);
+  await Orchestrator.run(msg);
+}
+
+function q(btn) {
+  const el=document.getElementById("inp");
+  if (!el) return;
+  el.value=btn.textContent.trim();
+  el.focus();
+}
+
+function buildRM(id, label) {
+  const el=document.getElementById("inp");
+  if (!el) return;
+  el.value=RM_BUILD[id]||"Construye y genera el archivo para: "+label;
+  el.focus();
+}
+
+function selAg(id) {
+  document.querySelectorAll(".ar").forEach(c=>c.classList.remove("active"));
+  document.getElementById("ac-"+id)?.classList.add("active");
+}
+
+function limpiar() {
+  const c=document.getElementById("chat");
+  const p=document.getElementById("pw");
+  if (c) c.innerHTML="";
+  if (p) p.style.display="none";
+  StateService.reset();
+  UIService.prog(0);
+  UIService.rfFiles();
+  AgentRegistry.all().forEach(ag=>UIService.astatus(ag.id,"idle"));
+  init();
+}
+
+// ── Backend switching ─────────────────────────────────────────────────
+function switchBackend(backend) {
+  ACTIVE_BACKEND = backend;
+  const pA = document.getElementById("panel-anthropic");
+  const pO = document.getElementById("panel-ollama");
+  const bA = document.getElementById("btn-anthropic");
+  const bO = document.getElementById("btn-ollama");
+  if (backend === "anthropic") {
+    if (pA) pA.style.display = "flex";
+    if (pO) pO.style.display = "none";
+    if (bA) { bA.style.background="var(--or)"; bA.style.color="#000"; bA.style.fontWeight="700"; }
+    if (bO) { bO.style.background="var(--s3)"; bO.style.color="var(--tm)"; bO.style.fontWeight="400"; }
+    ACTIVE_MODEL = document.getElementById("sel-ant-model")?.value || BACKENDS.anthropic.defaultModel;
+    setApiKey(document.getElementById("api-key-input")?.value || "");
+  } else {
+    if (pA) pA.style.display = "none";
+    if (pO) pO.style.display = "flex";
+    if (bO) { bO.style.background="var(--gr)"; bO.style.color="#000"; bO.style.fontWeight="700"; }
+    if (bA) { bA.style.background="var(--s3)"; bA.style.color="var(--tm)"; bA.style.fontWeight="400"; }
+    ACTIVE_MODEL = document.getElementById("sel-oll-model")?.value || BACKENDS.ollama.defaultModel;
+    detectOllama();
+  }
+  updateStatusBar();
+}
+
+function setApiKey(val) {
+  StateService.apiKey = val.trim();
+  const valid = StateService.apiKey.startsWith("sk-ant-");
+  setDot(valid ? "green" : "red");
+  setStatusTxt(valid ? "Anthropic OK" : "sin API key");
+  if (valid) UIService.sys("API key valida — listo para construir con Anthropic");
+}
+
+async function detectOllama() {
+  const statusEl = document.getElementById("ollama-status");
+  if (statusEl) statusEl.textContent = "detectando...";
+  if (statusEl) statusEl.style.color = "var(--am)";
+  try {
+    const models = await ApiService.fetchOllamaModels();
+    if (models.length === 0) throw new Error("sin modelos");
+    // Populate model select
+    const sel = document.getElementById("sel-oll-model");
+    if (sel) {
+      sel.innerHTML = models.map(m => "<option value=\""+m+"\">"+m+"</option>").join("");
+    }
+    ACTIVE_MODEL = models.includes("llama3.2") ? "llama3.2" : models[0];
+    if (sel) sel.value = ACTIVE_MODEL;
+    StateService.ollamaReady = true;
+    if (statusEl) { statusEl.textContent = models.length+" modelos"; statusEl.style.color="var(--gr)"; }
+    setDot("green");
+    setStatusTxt("Ollama OK");
+    UIService.sys("Ollama detectado — "+models.length+" modelos disponibles: "+models.slice(0,4).join(", ")+(models.length>4?"...":""));
+  } catch(e) {
+    StateService.ollamaReady = false;
+    if (statusEl) { statusEl.textContent = "no encontrado"; statusEl.style.color="var(--re)"; }
+    setDot("red");
+    setStatusTxt("Ollama offline");
+    UIService.sys("Ollama no detectado en localhost:11434. Asegurate de que este corriendo: ollama serve");
+  }
+}
+
+function setDot(state) {
+  const dot = document.getElementById("api-dot");
+  if (!dot) return;
+  const colors = { green:"var(--gr)", red:"var(--re)", amber:"var(--am)" };
+  const c = colors[state] || colors.red;
+  dot.style.background   = c;
+  dot.style.boxShadow    = "0 0 6px "+c;
+}
+
+function setStatusTxt(txt) {
+  const el = document.getElementById("api-status-txt");
+  if (el) el.textContent = txt;
+}
+
+function updateStatusBar() {
+  const isAnthropicReady = ACTIVE_BACKEND==="anthropic" && StateService.apiKey.startsWith("sk-ant-");
+  const isOllamaReady    = ACTIVE_BACKEND==="ollama"    && StateService.ollamaReady;
+  const ready = isAnthropicReady || isOllamaReady;
+  setDot(ready ? "green" : "red");
+}
+
+function switchTab(tab) {
+  const isChat = tab === "chat";
+  document.getElementById("panel-chat").style.display = isChat ? "flex" : "none";
+  document.getElementById("panel-chat").style.flexDirection = isChat ? "column" : "";
+  document.getElementById("panel-chat").style.flex = isChat ? "1" : "";
+  document.getElementById("panel-chat").style.overflow = isChat ? "hidden" : "";
+  document.getElementById("panel-info").style.display = isChat ? "none" : "block";
+  document.getElementById("iw-wrap").style.display = isChat ? "block" : "none";
+  const tc = document.getElementById("tab-chat");
+  const ti = document.getElementById("tab-info");
+  if(tc){ tc.style.background = isChat ? "var(--or)" : "var(--s3)"; tc.style.color = isChat ? "#000" : "var(--tm)"; tc.style.fontWeight = isChat ? "700" : "400"; }
+  if(ti){ ti.style.background = isChat ? "var(--s3)" : "var(--or)"; ti.style.color = isChat ? "var(--tm)" : "#000"; ti.style.fontWeight = isChat ? "400" : "700"; }
+}
+
+function onK(e) { if (e.key==="Enter"&&!e.shiftKey) { e.preventDefault(); enviar(); } }
+function rsz(el) { el.style.height="auto"; el.style.height=Math.min(el.scrollHeight,110)+"px"; }
+
+init();
+
+// ════════════════════════════════════════════════════════
+//  CONSTRUCTOR → EventBus integration (v2.0)
+// ════════════════════════════════════════════════════════
+
+_Reg.register('constructor', {
+  name: 'Constructor IA',
+  version: '2.0.0',
+  standalone: true,
+  api: {}
+});
+
+console.info('[ZytekOS] Constructor v2.0 listo · Core integrado');
+})(); // end ZytekOS async init
+
+</script>
+</body>
+</html>

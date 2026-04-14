@@ -1,0 +1,1396 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ZytekOS — POS Retail</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:wght@300;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ══ THEME ══ */
+[data-theme="dark"]{
+  --bg:#08101a;--surface:#0d1829;--surface2:#0f1e30;--surface3:#162338;
+  --border:#1e3048;--border2:#243a55;
+  --text:#e0eaf6;--text-dim:#4a6a8a;--text-mid:#7a9ab8;
+  --grid-line:rgba(30,80,140,0.18);
+  --topbar:#071018;--fkey:#0d1e33;--fkey-hover:#163050;
+}
+[data-theme="light"]{
+  --bg:#e8eef5;--surface:#ffffff;--surface2:#f4f7fb;--surface3:#eaf0f7;
+  --border:#ccd8e8;--border2:#b8cde0;
+  --text:#0f2035;--text-dim:#8aaccb;--text-mid:#4a6a8a;
+  --grid-line:rgba(80,130,200,0.1);
+  --topbar:#1a3a5c;--fkey:#1e4070;--fkey-hover:#26508a;
+}
+/* ZytekOS v2: CSS tokens managed by zytek-core.js
+:root{
+  --blue:#2a7de1;--blue2:#1a5fb4;--blue-glow:rgba(42,125,225,0.3);
+  --cyan:#00d4ff;--cyan-dim:rgba(0,212,255,0.12);
+  --green:#00e57a;--green-dim:rgba(0,229,122,0.12);
+  --amber:#ffb800;--amber-dim:rgba(255,184,0,0.12);
+  --red:#ff4455;--red-dim:rgba(255,68,85,0.12);
+  --purple:#9d6fff;
+}
+*/
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;overflow:hidden;transition:background .25s,color .25s}
+
+/* ══ TOPBAR ══ */
+.topbar{
+  height:56px;background:var(--topbar);border-bottom:2px solid var(--border);
+  display:flex;align-items:center;padding:0 16px;gap:0;position:relative;z-index:100;
+  flex-shrink:0;
+}
+.topbar-brand{display:flex;align-items:center;gap:10px;padding-right:16px;border-right:1px solid var(--border)}
+.brand-z{width:34px;height:34px;border-radius:7px;background:var(--blue);display:flex;align-items:center;justify-content:center;font-family:'Fraunces',serif;font-weight:700;font-size:18px;color:#fff;box-shadow:0 0 14px var(--blue-glow)}
+.brand-info{display:flex;flex-direction:column}
+.brand-name{font-weight:700;font-size:13px;color:var(--text);letter-spacing:.3px}
+.brand-sub{font-size:9px;color:var(--text-dim);font-family:'DM Mono',monospace;letter-spacing:1px}
+.topbar-search{flex:1;display:flex;align-items:center;padding:0 24px}
+.search-wrap{flex:1;max-width:600px;margin:0 auto;display:flex;align-items:center;gap:10px;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:0 14px;height:34px}
+.search-label{font-size:10px;font-family:'DM Mono',monospace;color:var(--text-dim);letter-spacing:2px;text-transform:uppercase;white-space:nowrap;border-right:1px solid var(--border);padding-right:10px;margin-right:4px}
+.search-input{flex:1;background:none;border:none;outline:none;color:var(--text);font-family:'DM Mono',monospace;font-size:12px;letter-spacing:.5px}
+.search-input::placeholder{color:var(--text-dim)}
+.search-icon{color:var(--text-dim);font-size:14px;cursor:pointer;flex-shrink:0}
+.topbar-right{display:flex;align-items:center;gap:0;border-left:1px solid var(--border);padding-left:16px}
+.bcv-block{text-align:right;padding-right:14px;border-right:1px solid var(--border);cursor:pointer}
+.bcv-label{font-size:9px;font-family:'DM Mono',monospace;letter-spacing:2px;color:var(--text-dim);text-transform:uppercase}
+.bcv-value{font-family:'DM Mono',monospace;font-size:14px;font-weight:500;color:var(--cyan)}
+.bcv-sub{font-size:9px;color:var(--text-dim);font-family:'DM Mono',monospace}
+.datetime-block{padding-left:14px;text-align:right}
+.date-val{font-family:'DM Mono',monospace;font-size:10px;color:var(--text-mid)}
+.time-val{font-family:'DM Mono',monospace;font-size:14px;color:var(--text);font-weight:500}
+.topbar-actions{display:flex;align-items:center;gap:6px;padding-left:14px;border-left:1px solid var(--border);margin-left:14px}
+.icon-btn{width:30px;height:30px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text-dim);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;transition:all .15s}
+.icon-btn:hover{border-color:var(--blue);color:var(--cyan)}
+.theme-btn{width:30px;height:30px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--amber);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;transition:all .15s}
+.theme-btn:hover{border-color:var(--amber);background:var(--amber-dim)}
+
+/* ══ NAV TABS ══ */
+.nav-tabs{height:36px;background:var(--topbar);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 8px;gap:2px;flex-shrink:0}
+.nav-tab{padding:5px 14px;border-radius:5px 5px 0 0;font-size:11px;font-family:'DM Mono',monospace;cursor:pointer;color:var(--text-dim);border:1px solid transparent;border-bottom:none;transition:all .15s;letter-spacing:.5px;white-space:nowrap}
+.nav-tab:hover{color:var(--text-mid);background:var(--surface)}
+.nav-tab.active{background:var(--surface);color:var(--cyan);border-color:var(--border);border-bottom-color:var(--surface)}
+
+/* ══ BODY LAYOUT ══ */
+.pos-body{display:flex;flex-direction:column;height:calc(100vh - 56px - 36px);}
+/* fkeys are inside the view, so pos-body height stays correct */
+.view{display:none;flex:1;overflow:hidden;flex-direction:column}
+.view.active{display:flex}
+
+/* ══ POS MAIN VIEW ══ */
+.pos-main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+/* SALE TABLE */
+.sale-table-wrap{flex:1;overflow-y:auto;background:var(--surface)}
+.sale-table{width:100%;border-collapse:collapse;table-layout:fixed}
+.sale-table thead th{
+  background:var(--surface2);color:var(--text-dim);font-size:10px;font-family:'DM Mono',monospace;
+  letter-spacing:2px;text-transform:uppercase;padding:8px 12px;border-bottom:1px solid var(--border);
+  border-right:1px solid var(--grid-line);text-align:left;font-weight:500;position:sticky;top:0;z-index:2
+}
+.sale-table tbody td{
+  padding:8px 12px;border-bottom:1px solid var(--grid-line);border-right:1px solid var(--grid-line);
+  font-family:'DM Mono',monospace;font-size:12px;color:var(--text-mid);vertical-align:middle
+}
+.sale-table tbody tr:hover td{background:rgba(42,125,225,0.05);color:var(--text)}
+.sale-table .td-code{color:var(--cyan);width:90px}
+.sale-table .td-cant{width:60px;text-align:center}
+.sale-table .td-cat{width:120px}
+.sale-table .td-desc{color:var(--text)}
+.sale-table .td-tp{width:60px;text-align:center}
+.sale-table .td-pu{width:110px;text-align:right;color:var(--green)}
+.sale-table .td-pt{width:110px;text-align:right;color:var(--cyan);font-weight:500}
+.sale-table .td-del{width:36px;text-align:center}
+.del-btn{width:22px;height:22px;border-radius:5px;background:var(--red-dim);border:1px solid rgba(255,68,85,0.3);color:var(--red);cursor:pointer;font-size:12px;display:inline-flex;align-items:center;justify-content:center;transition:all .15s}
+.del-btn:hover{background:var(--red);color:#fff}
+.empty-row td{text-align:center;color:var(--text-dim);padding:40px;font-family:'DM Mono',monospace;font-size:11px;letter-spacing:2px}
+/* BOTTOM SECTION */
+.pos-bottom{display:grid;grid-template-columns:1fr 300px;border-top:2px solid var(--border);flex-shrink:0}
+/* CLIENT PANEL */
+.client-panel{background:var(--surface);border-right:2px solid var(--border);padding:10px 14px;display:grid;grid-template-columns:1fr 1fr;gap:6px 12px}
+.client-panel-title{grid-column:1/-1;font-size:9px;font-family:'DM Mono',monospace;letter-spacing:3px;text-transform:uppercase;color:var(--text-dim);margin-bottom:2px;padding-bottom:4px;border-bottom:1px solid var(--border)}
+.field-group{display:flex;flex-direction:column;gap:3px}
+.field-group.full{grid-column:1/-1}
+.field-label{font-size:9px;font-family:'DM Mono',monospace;letter-spacing:2px;text-transform:uppercase;color:var(--text-dim)}
+.field-input{background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:5px 8px;color:var(--text);font-family:'DM Mono',monospace;font-size:11px;outline:none;transition:border-color .15s;width:100%}
+.field-input:focus{border-color:var(--blue);box-shadow:0 0 0 2px var(--blue-glow)}
+.field-textarea{background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:5px 8px;color:var(--text);font-family:'DM Mono',monospace;font-size:11px;outline:none;resize:none;width:100%;height:48px;transition:border-color .15s}
+.field-textarea:focus{border-color:var(--blue)}
+/* TOTALS PANEL */
+.totals-panel{background:var(--surface2);padding:12px 16px;display:flex;flex-direction:column;justify-content:space-between}
+.total-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--grid-line)}
+.total-label{font-size:11px;font-family:'DM Mono',monospace;color:var(--text-dim);letter-spacing:1px}
+.total-val{font-family:'DM Mono',monospace;font-size:12px;color:var(--text-mid)}
+.total-val.bs{color:var(--text)}
+.grand-total-wrap{padding-top:8px;display:flex;flex-direction:column;gap:2px}
+.grand-val-bs{font-family:'Fraunces',serif;font-size:32px;font-weight:700;color:var(--cyan);line-height:1;text-align:right}
+.grand-label-bs{font-size:9px;font-family:'DM Mono',monospace;color:var(--text-dim);text-align:right;letter-spacing:2px;text-transform:uppercase}
+.grand-usd{font-family:'DM Mono',monospace;font-size:13px;color:var(--green);text-align:right;margin-top:2px}
+
+/* ══ F-KEYS BAR — réplica exacta foto ══ */
+.fkeys-wrap{border-top:2px solid #0d2040;flex-shrink:0;background:#122040}
+.fkeys-row1{
+  display:grid;grid-template-columns:repeat(6,1fr);
+  height:72px;border-bottom:1px solid #0d2040
+}
+.fkeys-row2{
+  display:grid;grid-template-columns:repeat(6,1fr);
+  height:72px;
+}
+
+.fkey{
+  position:relative;overflow:hidden;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  cursor:pointer;
+  background:linear-gradient(180deg,#1e4a8c 0%,#163a74 100%);
+  border-right:1px solid #0d2040;
+  transition:background .12s,filter .12s;
+  min-width:0;
+}
+.fkeys-row1 .fkey:last-child{border-right:none}
+.fkey:hover{background:linear-gradient(180deg,#2a5faa 0%,#1e4a8c 100%);filter:brightness(1.08)}
+.fkey:active{filter:brightness(.88)}
+
+/* número watermark gigante — fondo semitransparente, offset a la derecha como en la foto */
+.fkey-bg{
+  position:absolute;
+  right:-8px;top:50%;transform:translateY(-48%);
+  font-family:'DM Sans',sans-serif;font-weight:900;
+  font-size:68px;line-height:1;letter-spacing:-4px;
+  color:rgba(255,255,255,0.07);
+  pointer-events:none;user-select:none;
+}
+.fkey.red-key .fkey-bg{color:rgba(255,255,255,0.12)}
+
+/* "F1" "F2"... arriba izquierda, blanco, bold */
+.fkey-num{
+  position:absolute;top:5px;left:7px;
+  font-family:'DM Sans',sans-serif;font-weight:800;font-size:13px;
+  color:#ffffff;line-height:1;z-index:1;letter-spacing:.2px;
+}
+
+/* ícono SVG-style centrado, blanco — desplazado levemente arriba del centro */
+.fkey-icon{
+  font-size:22px;line-height:1;z-index:1;
+  position:relative;top:-2px;
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,.4));
+}
+
+/* label bottom center, blanco */
+.fkey-label{
+  position:absolute;bottom:5px;left:0;right:0;
+  font-size:8px;font-family:'DM Sans',sans-serif;font-weight:700;
+  letter-spacing:.4px;text-transform:uppercase;
+  color:rgba(255,255,255,0.82);text-align:center;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  padding:0 3px;z-index:1;
+}
+
+/* ESC — rojo sólido como en la foto */
+.fkey.red-key{
+  background:linear-gradient(180deg,#d41428 0%,#aa0e20 100%);
+  border-color:#7a0a18;
+}
+.fkey.red-key:hover{background:linear-gradient(180deg,#e81830 0%,#c01024 100%)}
+.fkey.red-key .fkey-num{color:#fff;font-size:16px}
+.fkey.red-key .fkey-label{color:#fff}
+
+/* fila 2 — mismo grid, sin ancho fijo */
+.fkey-f12{border-right:1px solid #0d2040}
+.fkey-esc{}
+
+/* ══ ADMIN VIEW ══ */
+.admin-layout{display:grid;grid-template-columns:200px 1fr;height:100%;overflow:hidden}
+.admin-sidebar{background:var(--surface);border-right:1px solid var(--border);padding:12px 8px;display:flex;flex-direction:column;gap:2px;overflow-y:auto}
+.admin-sidebar-title{font-size:9px;font-family:'DM Mono',monospace;letter-spacing:3px;text-transform:uppercase;color:var(--text-dim);padding:8px 10px 4px}
+.admin-nav-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;cursor:pointer;color:var(--text-mid);font-size:12px;font-weight:500;transition:all .15s}
+.admin-nav-item:hover{background:var(--surface2);color:var(--text)}
+.admin-nav-item.active{background:var(--blue-glow);color:var(--cyan);border:1px solid rgba(42,125,225,0.2)}
+.admin-nav-icon{font-size:13px;width:16px;text-align:center}
+.admin-content{overflow-y:auto;padding:16px}
+
+/* ══ SHARED COMPONENTS ══ */
+.page-title{font-family:'Fraunces',serif;font-size:18px;font-weight:700;color:var(--text);margin-bottom:4px}
+.page-sub{font-size:11px;color:var(--text-dim);font-family:'DM Mono',monospace;margin-bottom:16px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:14px;overflow:hidden}
+.card-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:8px}
+.card-title{font-size:12px;font-weight:600;color:var(--text)}
+.card-sub{font-size:10px;color:var(--text-dim)}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:none;transition:all .15s;font-family:'DM Sans',sans-serif}
+.btn-primary{background:var(--blue);color:#fff}
+.btn-primary:hover{background:var(--blue2)}
+.btn-ghost{background:transparent;color:var(--text-mid);border:1px solid var(--border)}
+.btn-ghost:hover{border-color:var(--blue);color:var(--cyan)}
+.btn-red{background:var(--red-dim);color:var(--red);border:1px solid rgba(255,68,85,0.3)}
+.btn-red:hover{background:var(--red);color:#fff}
+.btn-sm{padding:4px 9px;font-size:10px}
+.badge{display:inline-flex;align-items:center;font-size:10px;font-family:'DM Mono',monospace;padding:2px 7px;border-radius:5px;font-weight:600}
+.badge-green{background:var(--green-dim);color:var(--green)}
+.badge-blue{background:var(--cyan-dim);color:var(--cyan)}
+.badge-amber{background:var(--amber-dim);color:var(--amber)}
+.badge-red{background:var(--red-dim);color:var(--red)}
+.badge-gray{background:var(--surface2);color:var(--text-dim);border:1px solid var(--border)}
+/* FORM */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px}
+.form-group{display:flex;flex-direction:column;gap:4px}
+.form-group.full{grid-column:1/-1}
+.form-label{font-size:9px;font-family:'DM Mono',monospace;letter-spacing:2px;text-transform:uppercase;color:var(--text-dim)}
+.form-input{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px;font-family:'DM Sans',sans-serif;outline:none;transition:border-color .15s;width:100%}
+.form-input:focus{border-color:var(--blue)}
+.form-select{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px;font-family:'DM Sans',sans-serif;outline:none;width:100%}
+/* TABLE */
+.data-table{width:100%;border-collapse:collapse}
+.data-table th{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--text-dim);font-family:'DM Mono',monospace;padding:9px 14px;text-align:left;background:var(--surface2);border-bottom:1px solid var(--border)}
+.data-table td{padding:10px 14px;border-bottom:1px solid var(--border);font-size:12px;color:var(--text-mid)}
+.data-table tr:last-child td{border-bottom:none}
+.data-table tr:hover td{background:rgba(42,125,225,0.04)}
+/* PERMISSION MATRIX */
+.perm-matrix{padding:14px;overflow-x:auto}
+.perm-table{width:100%;border-collapse:collapse}
+.perm-table th{font-size:9px;font-family:'DM Mono',monospace;letter-spacing:1px;text-transform:uppercase;color:var(--text-dim);padding:8px 10px;text-align:center;border-bottom:1px solid var(--border);min-width:70px}
+.perm-table th:first-child{text-align:left;min-width:120px}
+.perm-table td{padding:8px 10px;border-bottom:1px solid var(--grid-line);text-align:center;font-size:12px}
+.perm-table td:first-child{text-align:left;color:var(--text);font-weight:600}
+.perm-check{width:18px;height:18px;border-radius:4px;border:1px solid var(--border);background:var(--surface2);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font-size:11px;transition:all .15s}
+.perm-check.on{background:var(--green-dim);border-color:rgba(0,229,122,0.4);color:var(--green)}
+.perm-check.off{color:transparent}
+.perm-check:hover{border-color:var(--blue)}
+/* LOG ROW */
+.log-row{display:flex;align-items:flex-start;gap:12px;padding:10px 14px;border-bottom:1px solid var(--grid-line)}
+.log-row:last-child{border-bottom:none}
+.log-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px}
+.log-time{font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);white-space:nowrap;flex-shrink:0;width:80px}
+.log-user{font-family:'DM Mono',monospace;font-size:10px;color:var(--cyan);white-space:nowrap;flex-shrink:0;width:90px}
+.log-action{font-size:11px;color:var(--text-mid);flex:1}
+.log-module{font-size:9px;font-family:'DM Mono',monospace;color:var(--text-dim);background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:1px 5px;white-space:nowrap}
+/* KPIS */
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+@media(max-width:700px){.kpi-row{grid-template-columns:repeat(2,1fr)}}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px}
+.kpi-label{font-size:9px;font-family:'DM Mono',monospace;letter-spacing:2px;text-transform:uppercase;color:var(--text-dim);margin-bottom:5px}
+.kpi-val{font-family:'Fraunces',serif;font-size:22px;font-weight:700}
+/* SWITCH */
+.switch-wrap{display:flex;align-items:center;gap:8px}
+.switch{width:36px;height:20px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);position:relative;cursor:pointer;transition:background .2s}
+.switch.on{background:var(--blue)}
+.switch::after{content:'';position:absolute;width:14px;height:14px;border-radius:50%;background:#fff;top:2px;left:3px;transition:transform .2s}
+.switch.on::after{transform:translateX(16px)}
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}
+.modal-overlay.open{opacity:1;pointer-events:all}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:14px;width:100%;max-width:460px;max-height:90vh;overflow-y:auto;transform:scale(.96);transition:transform .2s}
+.modal-overlay.open .modal{transform:scale(1)}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)}
+.modal-title{font-family:'Fraunces',serif;font-size:16px;font-weight:700}
+.modal-close{width:28px;height:28px;border-radius:6px;background:var(--surface2);border:1px solid var(--border);color:var(--text-mid);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px}
+.modal-body{padding:20px}
+.modal-footer{padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end}
+/* BCV EDIT */
+.bcv-edit-wrap{display:flex;align-items:center;gap:6px;cursor:pointer}
+.bcv-edit-input{background:transparent;border:none;outline:none;font-family:'DM Mono',monospace;font-size:14px;color:var(--cyan);width:90px;text-align:right;cursor:pointer}
+.bcv-edit-input:focus{background:var(--surface2);border-radius:4px;padding:2px 6px;cursor:text}
+/* PRODUCT QUICK GRID */
+.prod-quick{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:12px}
+@media(max-width:600px){.prod-quick{grid-template-columns:repeat(2,1fr)}}
+.prod-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;cursor:pointer;transition:all .15s;text-align:center}
+.prod-card:hover{border-color:var(--blue);transform:translateY(-2px);box-shadow:0 4px 12px rgba(42,125,225,0.15)}
+.prod-card:active{transform:scale(.96)}
+.prod-em{font-size:22px;margin-bottom:4px}
+.prod-name{font-size:11px;font-weight:600;color:var(--text);margin-bottom:2px}
+.prod-price{font-family:'DM Mono',monospace;font-size:11px;color:var(--green)}
+/* CONFIG */
+.config-section{padding:14px;display:flex;flex-direction:column;gap:12px}
+.config-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--grid-line)}
+.config-row:last-child{border-bottom:none}
+.config-info .config-name{font-size:13px;font-weight:600;color:var(--text)}
+.config-info .config-desc{font-size:11px;color:var(--text-dim);margin-top:2px}
+/* PROVEEDOR CARD */
+.prov-row{display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--grid-line)}
+.prov-row:last-child{border-bottom:none}
+.prov-icon{width:34px;height:34px;border-radius:8px;background:var(--blue-glow);border:1px solid rgba(42,125,225,0.25);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.prov-info{flex:1}
+.prov-name{font-size:13px;font-weight:600;color:var(--text)}
+.prov-detail{font-size:10px;color:var(--text-dim);font-family:'DM Mono',monospace;margin-top:1px}
+.prov-balance{text-align:right}
+.prov-bal-val{font-family:'Fraunces',serif;font-size:14px;font-weight:700}
+.prov-bal-label{font-size:9px;color:var(--text-dim);font-family:'DM Mono',monospace}
+/* KDS CONFIG */
+.kds-station{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:all .15s}
+.kds-station:hover{border-color:var(--blue)}
+.kds-station.active{border-color:var(--cyan);background:var(--cyan-dim)}
+.kds-icon{font-size:24px}
+.kds-info{flex:1}
+.kds-name{font-size:13px;font-weight:600;color:var(--text)}
+.kds-desc{font-size:10px;color:var(--text-dim);margin-top:2px;font-family:'DM Mono',monospace}
+</style>
+<script src="zytek-core.js"></script>
+</head>
+<body>
+
+<!-- ══ TOPBAR ══ -->
+<div class="topbar">
+  <div class="topbar-brand">
+    <div class="brand-z">Z</div>
+    <div class="brand-info">
+      <div class="brand-name">PUNTO DE VENTA</div>
+      <div class="brand-sub">ZYTEK CLOUD ERP</div>
+    </div>
+  </div>
+  <div class="topbar-search">
+    <div class="search-wrap">
+      <span class="search-label">PRODUCTO</span>
+      <input class="search-input" id="search-input" type="text" placeholder="ESCANEÉ O ESCRIBA NOMBRE..." oninput="filterProducts(this.value)" onkeydown="handleSearchKey(event)">
+      <span class="search-icon">🔍</span>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="bcv-block" title="Click para editar">
+      <div class="bcv-label">TASA BCV</div>
+      <div class="bcv-edit-wrap">
+        <input class="bcv-edit-input" id="bcv-input" value="419.99" onchange="updateBCV(this.value)">
+        <span style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text-dim)">Bs/$</span>
+      </div>
+      <div class="bcv-sub" id="bcv-status">● manual</div>
+    </div>
+    <div class="datetime-block">
+      <div class="date-val" id="date-val">--/--/----</div>
+      <div class="time-val" id="time-val">--:--</div>
+    </div>
+    <div class="topbar-actions">
+      <button class="theme-btn" onclick="toggleTheme()" title="Dark/Light">☀️</button>
+      <div class="icon-btn" title="Notificaciones">🔔</div>
+      <div class="icon-btn" title="Usuario" style="background:var(--blue);color:#fff;border-color:var(--blue);font-weight:700;font-size:11px">DZ</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ NAV TABS ══ -->
+<div class="nav-tabs">
+  <div class="nav-tab active" onclick="switchView('pos',this)">🛒 VENTA</div>
+  <div class="nav-tab" onclick="switchView('productos',this)">📦 PRODUCTOS</div>
+  <div class="nav-tab" onclick="switchView('compras',this)">🏭 COMPRAS</div>
+  <div class="nav-tab" onclick="switchView('admin',this)">🔐 ADMIN</div>
+  <div class="nav-tab" onclick="switchView('config',this)">⚙️ CONFIG CAJA</div>
+</div>
+
+<!-- ══ POS BODY ══ -->
+<div class="pos-body">
+
+  <!-- ════ VENTA VIEW ════ -->
+  <div class="view active" id="view-pos">
+    <div class="pos-main">
+      <!-- Sale Table -->
+      <div class="sale-table-wrap">
+        <table class="sale-table">
+          <thead>
+            <tr>
+              <th class="td-code">CÓDIGO</th>
+              <th class="td-cant">CANT.</th>
+              <th class="td-cat">CATEGORÍA</th>
+              <th class="td-desc">DESCRIPCIÓN</th>
+              <th class="td-tp">TP</th>
+              <th class="td-pu">PRECIO UNITARIO</th>
+              <th class="td-pt">PRECIO TOTAL</th>
+              <th class="td-del"></th>
+            </tr>
+          </thead>
+          <tbody id="sale-tbody">
+            <tr class="empty-row" id="empty-row">
+              <td colspan="8">— SIN PRODUCTOS EN LA VENTA —</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Product Quick Access -->
+      <div id="prod-quick-panel" style="display:none;background:var(--surface2);border-top:1px solid var(--border);max-height:180px;overflow-y:auto">
+        <div style="padding:8px 12px;font-size:9px;font-family:'DM Mono',monospace;letter-spacing:2px;color:var(--text-dim);border-bottom:1px solid var(--border)">PRODUCTOS RÁPIDOS — Click para agregar</div>
+        <div class="prod-quick" id="prod-quick-grid"></div>
+      </div>
+
+      <!-- Bottom -->
+      <div class="pos-bottom">
+        <!-- Client Panel -->
+        <div class="client-panel">
+          <div class="client-panel-title">DATOS DEL CLIENTE</div>
+          <div class="field-group">
+            <span class="field-label">CLIENTE</span>
+            <input class="field-input" type="text" placeholder="Nombre o razón social" id="f-cliente">
+          </div>
+          <div class="field-group">
+            <span class="field-label">TELÉFONOS</span>
+            <input class="field-input" type="text" placeholder="+58 / +1 / +54" id="f-tel">
+          </div>
+          <div class="field-group">
+            <span class="field-label">RIF / C.I.</span>
+            <input class="field-input" type="text" placeholder="J-00000000-0" id="f-rif">
+          </div>
+          <div class="field-group">
+            <span class="field-label">OBSERVACIÓN</span>
+            <textarea class="field-textarea" placeholder="Notas adicionales..." id="f-obs"></textarea>
+          </div>
+          <div class="field-group full">
+            <span class="field-label">DIRECCIÓN</span>
+            <input class="field-input" type="text" placeholder="Dirección completa" id="f-dir">
+          </div>
+        </div>
+        <!-- Totals Panel -->
+        <div class="totals-panel">
+          <div>
+            <div class="total-row">
+              <span class="total-label">SUB-TOTAL</span>
+              <span class="total-val bs" id="t-sub">0,00 Bs</span>
+            </div>
+            <div class="total-row">
+              <span class="total-label">I.V.A (16%)</span>
+              <span class="total-val bs" id="t-iva">0,00 Bs</span>
+            </div>
+          </div>
+          <div class="grand-total-wrap">
+            <div class="grand-label-bs">MONTO TOTAL BS.</div>
+            <div class="grand-val-bs" id="t-total-bs">0,00</div>
+            <div class="grand-usd" id="t-total-usd">$0.00</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- F-KEYS — 2 filas de 6 -->
+    <div class="fkeys-wrap">
+      <!-- FILA 1: F1–F6 -->
+      <div class="fkeys-row1">
+        <div class="fkey" onclick="fkey('fichas')"><div class="fkey-bg">1</div><div class="fkey-num">F1</div><div class="fkey-icon">👤</div><div class="fkey-label">Fichas Clientes</div></div>
+        <div class="fkey" onclick="fkey('pago')"><div class="fkey-bg">2</div><div class="fkey-num">F2</div><div class="fkey-icon">💳</div><div class="fkey-label">Formas de Pago</div></div>
+        <div class="fkey" onclick="fkey('anular')"><div class="fkey-bg">3</div><div class="fkey-num">F3</div><div class="fkey-icon">🗑️</div><div class="fkey-label">Anular Venta</div></div>
+        <div class="fkey" onclick="fkey('existencias')"><div class="fkey-bg">4</div><div class="fkey-num">F4</div><div class="fkey-icon">📦</div><div class="fkey-label">Existencias</div></div>
+        <div class="fkey" onclick="fkey('suspender')"><div class="fkey-bg">5</div><div class="fkey-num">F5</div><div class="fkey-icon">⏸️</div><div class="fkey-label">Suspender</div></div>
+        <div class="fkey" onclick="fkey('retomar')"><div class="fkey-bg">6</div><div class="fkey-num">F6</div><div class="fkey-icon">▶️</div><div class="fkey-label">Retomar</div></div>
+      </div>
+      <!-- FILA 2: F7–F8–F10–F11–F12–ESC -->
+      <div class="fkeys-row2">
+        <div class="fkey" onclick="fkey('opciones')"><div class="fkey-bg">7</div><div class="fkey-num">F7</div><div class="fkey-icon">⚙️</div><div class="fkey-label">Opciones</div></div>
+        <div class="fkey" onclick="fkey('anulardoc')"><div class="fkey-bg">8</div><div class="fkey-num">F8</div><div class="fkey-icon">🚫</div><div class="fkey-label">Anular Doc</div></div>
+        <div class="fkey" onclick="fkey('monto')"><div class="fkey-bg">10</div><div class="fkey-num">F10</div><div class="fkey-icon">📄</div><div class="fkey-label">Monto Total</div></div>
+        <div class="fkey" onclick="fkey('revision')"><div class="fkey-bg">11</div><div class="fkey-num">F11</div><div class="fkey-icon">📋</div><div class="fkey-label">Revisión Caja</div></div>
+        <div class="fkey fkey-f12" onclick="fkey('clausura')"><div class="fkey-bg">12</div><div class="fkey-num">F12</div><div class="fkey-icon">🔒</div><div class="fkey-label">Clausura Día</div></div>
+        <div class="fkey fkey-esc red-key" onclick="fkey('salir')"><div class="fkey-bg">ESC</div><div class="fkey-num">ESC</div><div class="fkey-icon">✕</div><div class="fkey-label">Salir</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════ PRODUCTOS VIEW ════ -->
+  <div class="view" id="view-productos" style="overflow-y:auto;padding:16px">
+    <div class="page-title">Gestión de Productos</div>
+    <div class="page-sub">Catálogo completo · 48 productos activos</div>
+    <div class="kpi-row">
+      <div class="kpi"><div class="kpi-label">Total productos</div><div class="kpi-val" style="color:var(--cyan)">48</div></div>
+      <div class="kpi"><div class="kpi-label">Stock bajo</div><div class="kpi-val" style="color:var(--red)">5</div></div>
+      <div class="kpi"><div class="kpi-label">Categorías</div><div class="kpi-val" style="color:var(--blue)">8</div></div>
+      <div class="kpi"><div class="kpi-label">Valor inventario</div><div class="kpi-val" style="color:var(--green);font-size:16px">$24.8K</div></div>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <div><div class="card-title">Catálogo de Productos</div><div class="card-sub">Gestión completa de SKU, precios y stock</div></div>
+        <button class="btn btn-primary" onclick="openModal('modal-producto')">+ Nuevo producto</button>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="data-table">
+          <thead><tr><th>SKU</th><th>Producto</th><th>Categoría</th><th>Precio USD</th><th>Precio Bs</th><th>Stock</th><th>Estado</th><th>Acciones</th></tr></thead>
+          <tbody>
+            <tr><td style="font-family:'DM Mono',monospace;color:var(--cyan)">SKU-0041</td><td style="color:var(--text);font-weight:600">📱 Samsung A54 128GB</td><td>Electrónica</td><td style="color:var(--green);font-family:'DM Mono',monospace">$599.00</td><td style="font-family:'DM Mono',monospace;color:var(--text-mid)">251,579 Bs</td><td style="font-family:'DM Mono',monospace">12</td><td><span class="badge badge-green">Activo</span></td><td><div style="display:flex;gap:4px"><button class="btn btn-ghost btn-sm">✏️</button><button class="btn btn-red btn-sm">🗑️</button></div></td></tr>
+            <tr><td style="font-family:'DM Mono',monospace;color:var(--cyan)">SKU-0023</td><td style="color:var(--text);font-weight:600">👟 Nike Air Max T42</td><td>Calzado</td><td style="color:var(--green);font-family:'DM Mono',monospace">$120.00</td><td style="font-family:'DM Mono',monospace;color:var(--text-mid)">50,399 Bs</td><td style="font-family:'DM Mono',monospace;color:var(--amber)">4 ⚠️</td><td><span class="badge badge-amber">Stock bajo</span></td><td><div style="display:flex;gap:4px"><button class="btn btn-ghost btn-sm">✏️</button><button class="btn btn-red btn-sm">🗑️</button></div></td></tr>
+            <tr><td style="font-family:'DM Mono',monospace;color:var(--cyan)">SKU-0112</td><td style="color:var(--text);font-weight:600">☕ Café molido 1kg</td><td>Alimentos</td><td style="color:var(--green);font-family:'DM Mono',monospace">$18.00</td><td style="font-family:'DM Mono',monospace;color:var(--text-mid)">7,560 Bs</td><td style="font-family:'DM Mono',monospace;color:var(--red)">2 ⚠️</td><td><span class="badge badge-red">Crítico</span></td><td><div style="display:flex;gap:4px"><button class="btn btn-ghost btn-sm">✏️</button><button class="btn btn-red btn-sm">🗑️</button></div></td></tr>
+            <tr><td style="font-family:'DM Mono',monospace;color:var(--cyan)">SKU-0067</td><td style="color:var(--text);font-weight:600">🎧 Audífonos BT Pro</td><td>Electrónica</td><td style="color:var(--green);font-family:'DM Mono',monospace">$49.00</td><td style="font-family:'DM Mono',monospace;color:var(--text-mid)">20,580 Bs</td><td style="font-family:'DM Mono',monospace">8</td><td><span class="badge badge-green">Activo</span></td><td><div style="display:flex;gap:4px"><button class="btn btn-ghost btn-sm">✏️</button><button class="btn btn-red btn-sm">🗑️</button></div></td></tr>
+            <tr><td style="font-family:'DM Mono',monospace;color:var(--cyan)">SKU-0055</td><td style="color:var(--text);font-weight:600">💡 Bombillo LED 12W</td><td>Hogar</td><td style="color:var(--green);font-family:'DM Mono',monospace">$8.00</td><td style="font-family:'DM Mono',monospace;color:var(--text-mid)">3,360 Bs</td><td style="font-family:'DM Mono',monospace">40</td><td><span class="badge badge-green">Activo</span></td><td><div style="display:flex;gap:4px"><button class="btn btn-ghost btn-sm">✏️</button><button class="btn btn-red btn-sm">🗑️</button></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════ COMPRAS VIEW ════ -->
+  <div class="view" id="view-compras" style="overflow-y:auto">
+    <div class="admin-layout">
+      <div class="admin-sidebar">
+        <div class="admin-sidebar-title">Compras</div>
+        <div class="admin-nav-item active" onclick="switchAdminSection(this,'sec-proveedores')"><span class="admin-nav-icon">🏭</span>Proveedores</div>
+        <div class="admin-nav-item" onclick="switchAdminSection(this,'sec-ordenes')"><span class="admin-nav-icon">📋</span>Órdenes de Compra</div>
+        <div class="admin-nav-item" onclick="switchAdminSection(this,'sec-cxp')"><span class="admin-nav-icon">🔴</span>Cuentas x Pagar</div>
+        <div class="admin-nav-item" onclick="switchAdminSection(this,'sec-cxc')"><span class="admin-nav-icon">💚</span>Cuentas x Cobrar</div>
+      </div>
+      <div class="admin-content">
+        <!-- PROVEEDORES -->
+        <div id="sec-proveedores">
+          <div class="page-title">Proveedores</div>
+          <div class="page-sub">7 proveedores activos</div>
+          <div class="card">
+            <div class="card-head">
+              <div><div class="card-title">Directorio de Proveedores</div></div>
+              <button class="btn btn-primary btn-sm" onclick="openModal('modal-proveedor')">+ Nuevo proveedor</button>
+            </div>
+            <div class="prov-row"><div class="prov-icon">📱</div><div class="prov-info"><div class="prov-name">TechDistrib MX</div><div class="prov-detail">Electrónica · CDMX 🇲🇽 · RFC: TDM-2019</div></div><div class="prov-balance"><div class="prov-bal-val" style="color:var(--red)">$4,200</div><div class="prov-bal-label">por pagar</div></div><div style="display:flex;gap:4px;margin-left:10px"><button class="btn btn-ghost btn-sm">Ver</button><button class="btn btn-primary btn-sm">OC</button></div></div>
+            <div class="prov-row"><div class="prov-icon">👕</div><div class="prov-info"><div class="prov-name">TextilBaires AR</div><div class="prov-detail">Ropa · Buenos Aires 🇦🇷 ⚠️ USD</div></div><div class="prov-balance"><div class="prov-bal-val" style="color:var(--red)">$2,100</div><div class="prov-bal-label">vencido</div></div><div style="display:flex;gap:4px;margin-left:10px"><button class="btn btn-ghost btn-sm">Ver</button><button class="btn btn-primary btn-sm">OC</button></div></div>
+            <div class="prov-row"><div class="prov-icon">☕</div><div class="prov-info"><div class="prov-name">AgroDistrib VE</div><div class="prov-detail">Alimentos · Caracas 🇻🇪 ⚠️ Zelle/USDT</div></div><div class="prov-balance"><div class="prov-bal-val" style="color:var(--amber)">$1,800</div><div class="prov-bal-label">pend. 10d</div></div><div style="display:flex;gap:4px;margin-left:10px"><button class="btn btn-ghost btn-sm">Ver</button><button class="btn btn-primary btn-sm">OC</button></div></div>
+            <div class="prov-row"><div class="prov-icon">💡</div><div class="prov-info"><div class="prov-name">IluminaTech CO</div><div class="prov-detail">Hogar · Bogotá 🇨🇴</div></div><div class="prov-balance"><div class="prov-bal-val" style="color:var(--green)">$0</div><div class="prov-bal-label">al día</div></div><div style="display:flex;gap:4px;margin-left:10px"><button class="btn btn-ghost btn-sm">Ver</button><button class="btn btn-primary btn-sm">OC</button></div></div>
+          </div>
+        </div>
+        <!-- ORDENES -->
+        <div id="sec-ordenes" style="display:none">
+          <div class="page-title">Órdenes de Compra</div>
+          <div class="page-sub">5 órdenes activas</div>
+          <div class="card">
+            <div class="card-head">
+              <div class="card-title">Órdenes de Compra</div>
+              <button class="btn btn-primary btn-sm" onclick="openModal('modal-oc')">+ Nueva OC</button>
+            </div>
+            <table class="data-table">
+              <thead><tr><th>OC #</th><th>Proveedor</th><th>Monto</th><th>Fecha</th><th>Vence</th><th>Estado</th><th></th></tr></thead>
+              <tbody>
+                <tr><td style="font-family:'DM Mono',monospace;color:var(--cyan)">OC-2024</td><td style="color:var(--text)">TechDistrib MX</td><td style="font-family:'DM Mono',monospace;color:var(--amber)">$4,200</td><td style="font-family:'DM Mono',monospace">Mar 28</td><td style="font-family:'DM Mono',monospace;color:var(--amber)">Abr 9</td><td><span class="badge badge-amber">Pendiente</span></td><td><button class="btn btn-ghost btn-sm">Ver</button></td></tr>
+                <tr><td style="font-family:'DM Mono',monospace;color:var(--cyan)">OC-2023</td><td style="color:var(--text)">AgroDistrib VE ⚠️</td><td style="font-family:'DM Mono',monospace;color:var(--green)">$1,800 USD</td><td style="font-family:'DM Mono',monospace">Mar 25</td><td style="font-family:'DM Mono',monospace">Abr 14</td><td><span class="badge badge-green">Recibida</span></td><td><button class="btn btn-ghost btn-sm">Ver</button></td></tr>
+                <tr><td style="font-family:'DM Mono',monospace;color:var(--cyan)">OC-2022</td><td style="color:var(--text)">TextilBaires AR ⚠️</td><td style="font-family:'DM Mono',monospace;color:var(--red)">$2,100 USD</td><td style="font-family:'DM Mono',monospace">Mar 10</td><td style="font-family:'DM Mono',monospace;color:var(--red)">Abr 2 ⚠️</td><td><span class="badge badge-red">Vencida</span></td><td><button class="btn btn-ghost btn-sm">Ver</button></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <!-- CXP -->
+        <div id="sec-cxp" style="display:none">
+          <div class="page-title">Cuentas por Pagar</div>
+          <div class="page-sub">$8,100 pendiente · 2 vencidas</div>
+          <div class="card">
+            <div class="card-head"><div class="card-title">Saldos a proveedores</div></div>
+            <table class="data-table">
+              <thead><tr><th>Proveedor</th><th>Total</th><th>Pagado</th><th>Saldo</th><th>Vence</th><th>Estado</th><th></th></tr></thead>
+              <tbody>
+                <tr><td style="color:var(--text)">TechDistrib MX</td><td style="font-family:'DM Mono',monospace">$4,200</td><td style="font-family:'DM Mono',monospace;color:var(--text-dim)">$0</td><td style="font-family:'DM Mono',monospace;color:var(--amber)">$4,200</td><td style="font-family:'DM Mono',monospace;color:var(--amber)">Abr 9</td><td><span class="badge badge-amber">Pendiente</span></td><td><button class="btn btn-primary btn-sm">Pagar</button></td></tr>
+                <tr><td style="color:var(--text)">TextilBaires AR ⚠️</td><td style="font-family:'DM Mono',monospace">$2,100</td><td style="font-family:'DM Mono',monospace;color:var(--text-dim)">$0</td><td style="font-family:'DM Mono',monospace;color:var(--red)">$2,100</td><td style="font-family:'DM Mono',monospace;color:var(--red)">Vencida</td><td><span class="badge badge-red">Mora</span></td><td><button class="btn btn-primary btn-sm">Pagar</button></td></tr>
+                <tr><td style="color:var(--text)">AgroDistrib VE ⚠️</td><td style="font-family:'DM Mono',monospace">$1,800</td><td style="font-family:'DM Mono',monospace;color:var(--text-dim)">$0</td><td style="font-family:'DM Mono',monospace;color:var(--text)">$1,800</td><td style="font-family:'DM Mono',monospace">Abr 14</td><td><span class="badge badge-green">Al día</span></td><td><button class="btn btn-primary btn-sm">Pagar</button></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <!-- CXC -->
+        <div id="sec-cxc" style="display:none">
+          <div class="page-title">Cuentas por Cobrar</div>
+          <div class="page-sub">$18,400 pendiente · 3 vencidas</div>
+          <div class="card">
+            <div class="card-head"><div class="card-title">Saldos de clientes</div></div>
+            <table class="data-table">
+              <thead><tr><th>Cliente</th><th>Total</th><th>Cobrado</th><th>Saldo</th><th>Vence</th><th>Estado</th><th></th></tr></thead>
+              <tbody>
+                <tr><td style="color:var(--text)">MercaFácil VE ⚠️</td><td style="font-family:'DM Mono',monospace">$1,800</td><td style="font-family:'DM Mono',monospace;color:var(--text-dim)">$0</td><td style="font-family:'DM Mono',monospace;color:var(--red)">$1,800 USD</td><td style="font-family:'DM Mono',monospace;color:var(--red)">28d mora</td><td><span class="badge badge-red">Mora</span></td><td><button class="btn btn-ghost btn-sm">💬</button></td></tr>
+                <tr><td style="color:var(--text)">AutoParts PE</td><td style="font-family:'DM Mono',monospace">$4,200</td><td style="font-family:'DM Mono',monospace;color:var(--green)">$3,360</td><td style="font-family:'DM Mono',monospace;color:var(--amber)">$840</td><td style="font-family:'DM Mono',monospace">Abr 16</td><td><span class="badge badge-amber">Parcial</span></td><td><button class="btn btn-ghost btn-sm">💬</button></td></tr>
+                <tr><td style="color:var(--text)">Hotel Mirador CO</td><td style="font-family:'DM Mono',monospace">$3,200</td><td style="font-family:'DM Mono',monospace;color:var(--text-dim)">$0</td><td style="font-family:'DM Mono',monospace;color:var(--text)">$3,200</td><td style="font-family:'DM Mono',monospace">Abr 20</td><td><span class="badge badge-green">Al día</span></td><td><button class="btn btn-ghost btn-sm">💬</button></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════ ADMIN VIEW ════ -->
+  <div class="view" id="view-admin">
+    <div class="admin-layout">
+      <div class="admin-sidebar">
+        <div class="admin-sidebar-title">Administración</div>
+        <div class="admin-nav-item active" onclick="switchAdminSection(this,'sec-usuarios')"><span class="admin-nav-icon">👥</span>Usuarios</div>
+        <div class="admin-nav-item" onclick="switchAdminSection(this,'sec-permisos')"><span class="admin-nav-icon">🔐</span>Permisos</div>
+        <div class="admin-nav-item" onclick="switchAdminSection(this,'sec-auditoria')"><span class="admin-nav-icon">📜</span>Auditoría</div>
+      </div>
+      <div class="admin-content">
+        <!-- USUARIOS -->
+        <div id="sec-usuarios">
+          <div class="page-title">Gestión de Usuarios</div>
+          <div class="page-sub">Control de acceso al sistema</div>
+          <div class="kpi-row">
+            <div class="kpi"><div class="kpi-label">Total usuarios</div><div class="kpi-val" style="color:var(--cyan)">6</div></div>
+            <div class="kpi"><div class="kpi-label">Activos hoy</div><div class="kpi-val" style="color:var(--green)">3</div></div>
+            <div class="kpi"><div class="kpi-label">Administradores</div><div class="kpi-val" style="color:var(--amber)">2</div></div>
+            <div class="kpi"><div class="kpi-label">Cajeros</div><div class="kpi-val" style="color:var(--blue)">4</div></div>
+          </div>
+          <div class="card">
+            <div class="card-head">
+              <div><div class="card-title">Usuarios del sistema</div><div class="card-sub">Gestión de acceso y roles</div></div>
+              <button class="btn btn-primary" onclick="openModal('modal-usuario')">+ Nuevo usuario</button>
+            </div>
+            <table class="data-table">
+              <thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Último acceso</th><th>Estado</th><th>Acciones</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td style="font-family:'DM Mono',monospace;color:var(--cyan)">dfornerino</td>
+                  <td style="color:var(--text);font-weight:600">Daniel Fornerino</td>
+                  <td><span class="badge badge-amber">Super Admin</span></td>
+                  <td style="font-family:'DM Mono',monospace;font-size:10px">Hoy 09:42</td>
+                  <td><span class="badge badge-green">● Activo</span></td>
+                  <td><div style="display:flex;gap:4px"><button class="btn btn-ghost btn-sm">✏️</button><button class="btn btn-red btn-sm" disabled style="opacity:.4">🗑️</button></div></td>
+                </tr>
+                <tr>
+                  <td style="font-family:'DM Mono',monospace;color:var(--cyan)">cajero01</td>
+                  <td style="color:var(--text);font-weight:600">María González</td>
+                  <td><span class="badge badge-blue">Cajero</span></td>
+                  <td style="font-family:'DM Mono',monospace;font-size:10px">Hoy 08:00</td>
+                  <td><span class="badge badge-green">● Activo</span></td>
+                  <td><div style="display:flex;gap:4px"><button class="btn btn-ghost btn-sm">✏️</button><button class="btn btn-red btn-sm">🗑️</button></div></td>
+                </tr>
+                <tr>
+                  <td style="font-family:'DM Mono',monospace;color:var(--cyan)">cajero02</td>
+                  <td style="color:var(--text);font-weight:600">Carlos Pérez</td>
+                  <td><span class="badge badge-blue">Cajero</span></td>
+                  <td style="font-family:'DM Mono',monospace;font-size:10px">Ayer 18:30</td>
+                  <td><span class="badge badge-gray">Inactivo</span></td>
+                  <td><div style="display:flex;gap:4px"><button class="btn btn-ghost btn-sm">✏️</button><button class="btn btn-red btn-sm">🗑️</button></div></td>
+                </tr>
+                <tr>
+                  <td style="font-family:'DM Mono',monospace;color:var(--cyan)">supervisor</td>
+                  <td style="color:var(--text);font-weight:600">Ana Ramírez</td>
+                  <td><span class="badge badge-amber">Supervisor</span></td>
+                  <td style="font-family:'DM Mono',monospace;font-size:10px">Hoy 10:15</td>
+                  <td><span class="badge badge-green">● Activo</span></td>
+                  <td><div style="display:flex;gap:4px"><button class="btn btn-ghost btn-sm">✏️</button><button class="btn btn-red btn-sm">🗑️</button></div></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <!-- PERMISOS -->
+        <div id="sec-permisos" style="display:none">
+          <div class="page-title">Matriz de Permisos</div>
+          <div class="page-sub">Control por módulo y rol</div>
+          <div class="card">
+            <div class="card-head"><div class="card-title">Permisos por rol</div><div class="card-sub">Click en ✓ para cambiar</div></div>
+            <div class="perm-matrix">
+              <table class="perm-table">
+                <thead>
+                  <tr>
+                    <th>Módulo / Acción</th>
+                    <th>Super Admin</th>
+                    <th>Admin</th>
+                    <th>Supervisor</th>
+                    <th>Cajero</th>
+                  </tr>
+                </thead>
+                <tbody id="perm-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <!-- AUDITORIA -->
+        <div id="sec-auditoria" style="display:none">
+          <div class="page-title">Auditoría de Sistema</div>
+          <div class="page-sub">Registro de todas las acciones por usuario</div>
+          <div class="card" style="margin-bottom:12px">
+            <div style="padding:12px 14px;display:flex;gap:8px;flex-wrap:wrap">
+              <select class="form-select" style="width:auto;flex:1">
+                <option>Todos los usuarios</option>
+                <option>dfornerino</option>
+                <option>cajero01</option>
+                <option>cajero02</option>
+                <option>supervisor</option>
+              </select>
+              <select class="form-select" style="width:auto;flex:1">
+                <option>Todos los módulos</option>
+                <option>Venta</option>
+                <option>Inventario</option>
+                <option>Caja</option>
+                <option>Configuración</option>
+                <option>Admin</option>
+              </select>
+              <input class="form-input" type="date" style="width:auto;flex:1">
+              <button class="btn btn-primary">Filtrar</button>
+              <button class="btn btn-ghost">📥 Exportar</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head"><div class="card-title">Log de actividad</div><div class="card-sub" id="log-count">Mostrando 8 eventos</div></div>
+            <div id="log-container"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════ CONFIG CAJA VIEW ════ -->
+  <div class="view" id="view-config" style="overflow-y:auto">
+    <div class="admin-layout">
+      <div class="admin-sidebar">
+        <div class="admin-sidebar-title">Config Caja</div>
+        <div class="admin-nav-item active" onclick="switchAdminSection(this,'sec-caja-general')"><span class="admin-nav-icon">💰</span>General</div>
+        <div class="admin-nav-item" onclick="switchAdminSection(this,'sec-caja-metodos')"><span class="admin-nav-icon">💳</span>Métodos de Pago</div>
+        <div class="admin-nav-item" onclick="switchAdminSection(this,'sec-caja-impuestos')"><span class="admin-nav-icon">📊</span>Impuestos</div>
+        <div class="admin-nav-item" onclick="switchAdminSection(this,'sec-caja-impresora')"><span class="admin-nav-icon">🖨️</span>Impresora</div>
+        <div class="admin-nav-item" onclick="switchAdminSection(this,'sec-caja-turnos')"><span class="admin-nav-icon">🕐</span>Turnos</div>
+        <div class="admin-nav-item" onclick="switchAdminSection(this,'sec-kiosk-config')"><span class="admin-nav-icon">🏷️</span>Config Kiosk</div>
+      </div>
+      <div class="admin-content">
+        <!-- GENERAL -->
+        <div id="sec-caja-general">
+          <div class="page-title">Configuración General</div>
+          <div class="page-sub">Parámetros base de la caja</div>
+          <div class="card">
+            <div class="card-head"><div class="card-title">Datos del negocio</div></div>
+            <div class="form-grid">
+              <div class="form-group full"><label class="form-label">Nombre del negocio</label><input class="form-input" value="Mi Tienda / Zytek Cloud ERP"></div>
+              <div class="form-group"><label class="form-label">RIF / RFC / CUIT</label><input class="form-input" value="J-00000000-0"></div>
+              <div class="form-group"><label class="form-label">Dirección fiscal</label><input class="form-input" placeholder="Dirección completa"></div>
+              <div class="form-group"><label class="form-label">País</label><select class="form-select"><option>🇻🇪 Venezuela</option><option>🇲🇽 México</option><option>🇨🇴 Colombia</option><option>🇦🇷 Argentina</option><option>🇵🇪 Perú</option><option>🇺🇸 USA</option></select></div>
+              <div class="form-group"><label class="form-label">Moneda principal</label><select class="form-select"><option>USD (Dólar)</option><option>VES (Bolívar)</option><option>MXN (Peso MX)</option><option>COP (Peso CO)</option><option>ARS (Peso AR)</option></select></div>
+              <div class="form-group"><label class="form-label">Tasa BCV actual</label><input class="form-input" id="cfg-bcv" value="419.99" placeholder="Bs por $"></div>
+              <div class="form-group full"><label class="form-label">Actualización BCV</label>
+                <div style="display:flex;gap:8px;align-items:center">
+                  <select class="form-select" style="flex:1"><option>Manual (cajero actualiza)</option><option>Auto diario 09:00am</option><option selected>Ambas — Auto + override manual</option></select>
+                  <button class="btn btn-ghost">🔄 Obtener BCV ahora</button>
+                </div>
+              </div>
+            </div>
+            <div style="padding:0 14px 14px;display:flex;justify-content:flex-end"><button class="btn btn-primary">💾 Guardar cambios</button></div>
+          </div>
+        </div>
+        <!-- MÉTODOS DE PAGO -->
+        <div id="sec-caja-metodos" style="display:none">
+          <div class="page-title">Métodos de Pago</div>
+          <div class="page-sub">Configura qué métodos acepta esta caja</div>
+          <div class="card">
+            <div class="config-section">
+              <div class="config-row"><div class="config-info"><div class="config-name">💵 Efectivo (VES/USD)</div><div class="config-desc">Permite cobro en efectivo en la moneda seleccionada</div></div><div class="switch on" onclick="this.classList.toggle('on')"></div></div>
+              <div class="config-row"><div class="config-info"><div class="config-name">💳 Tarjeta de débito/crédito</div><div class="config-desc">Requiere POS bancario conectado</div></div><div class="switch on" onclick="this.classList.toggle('on')"></div></div>
+              <div class="config-row"><div class="config-info"><div class="config-name">🏦 Transferencia bancaria</div><div class="config-desc">Pago móvil o transferencia inmediata</div></div><div class="switch on" onclick="this.classList.toggle('on')"></div></div>
+              <div class="config-row"><div class="config-info"><div class="config-name">💵 Zelle (USD)</div><div class="config-desc">Para clientes Venezuela y exterior · solo USD</div></div><div class="switch on" onclick="this.classList.toggle('on')"></div></div>
+              <div class="config-row"><div class="config-info"><div class="config-name">₿ USDT / Cripto</div><div class="config-desc">Tether u otras stablecoins</div></div><div class="switch" onclick="this.classList.toggle('on')"></div></div>
+              <div class="config-row"><div class="config-info"><div class="config-name">📱 QR / Billetera digital</div><div class="config-desc">Pago QR local (Pago Móvil VE, Nequi CO, etc.)</div></div><div class="switch on" onclick="this.classList.toggle('on')"></div></div>
+              <div class="config-row"><div class="config-info"><div class="config-name">📋 Crédito / Fiado</div><div class="config-desc">Ventas a crédito para clientes autorizados</div></div><div class="switch" onclick="this.classList.toggle('on')"></div></div>
+            </div>
+          </div>
+        </div>
+        <!-- IMPUESTOS -->
+        <div id="sec-caja-impuestos" style="display:none">
+          <div class="page-title">Configuración de Impuestos</div>
+          <div class="page-sub">Tasas aplicables en esta caja</div>
+          <div class="card">
+            <div class="card-head"><div class="card-title">Impuestos activos</div><button class="btn btn-primary btn-sm">+ Agregar</button></div>
+            <div class="config-section">
+              <div class="config-row"><div class="config-info"><div class="config-name">IVA General — 16%</div><div class="config-desc">Impuesto al Valor Agregado · Aplica a mayoría de productos</div></div><div style="display:flex;align-items:center;gap:8px"><input class="form-input" value="16" style="width:60px;text-align:center">%<div class="switch on" onclick="this.classList.toggle('on')"></div></div></div>
+              <div class="config-row"><div class="config-info"><div class="config-name">IVA Reducido — 8%</div><div class="config-desc">Para productos de primera necesidad</div></div><div style="display:flex;align-items:center;gap:8px"><input class="form-input" value="8" style="width:60px;text-align:center">%<div class="switch" onclick="this.classList.toggle('on')"></div></div></div>
+              <div class="config-row"><div class="config-info"><div class="config-name">Exento — 0%</div><div class="config-desc">Medicamentos, alimentos básicos según decreto</div></div><div style="display:flex;align-items:center;gap:8px"><input class="form-input" value="0" style="width:60px;text-align:center">%<div class="switch on" onclick="this.classList.toggle('on')"></div></div></div>
+            </div>
+          </div>
+        </div>
+        <!-- IMPRESORA -->
+        <div id="sec-caja-impresora" style="display:none">
+          <div class="page-title">Configuración de Impresora</div>
+          <div class="page-sub">Impresora de tickets y facturas</div>
+          <div class="card">
+            <div class="form-grid">
+              <div class="form-group"><label class="form-label">Tipo de impresora</label><select class="form-select"><option>Térmica 80mm</option><option>Térmica 58mm</option><option>Matricial</option><option>Láser/Inkjet</option></select></div>
+              <div class="form-group"><label class="form-label">Conexión</label><select class="form-select"><option>USB</option><option>Red (IP)</option><option>Bluetooth</option></select></div>
+              <div class="form-group"><label class="form-label">IP / Puerto</label><input class="form-input" placeholder="192.168.1.100:9100"></div>
+              <div class="form-group"><label class="form-label">Copias por venta</label><input class="form-input" type="number" value="1"></div>
+              <div class="form-group full">
+                <label class="form-label">Pie del ticket</label>
+                <input class="form-input" value="¡Gracias por su compra! · ZytekOS">
+              </div>
+            </div>
+            <div style="padding:0 14px 14px;display:flex;gap:8px;justify-content:flex-end">
+              <button class="btn btn-ghost">🖨️ Test de impresión</button>
+              <button class="btn btn-primary">💾 Guardar</button>
+            </div>
+          </div>
+        </div>
+        <!-- TURNOS -->
+        <div id="sec-caja-turnos" style="display:none">
+          <div class="page-title">Configuración de Turnos</div>
+          <div class="page-sub">Horarios y apertura de caja</div>
+          <div class="card">
+            <div class="config-section">
+              <div class="config-row"><div class="config-info"><div class="config-name">Apertura automática</div><div class="config-desc">Abrir caja automáticamente a la hora configurada</div></div><div class="switch" onclick="this.classList.toggle('on')"></div></div>
+              <div class="config-row"><div class="config-info"><div class="config-name">Hora de apertura</div><div class="config-desc">Turno diurno estándar</div></div><input class="form-input" type="time" value="08:00" style="width:120px"></div>
+              <div class="config-row"><div class="config-info"><div class="config-name">Monto inicial de caja</div><div class="config-desc">Capital de trabajo en efectivo al iniciar turno</div></div><input class="form-input" value="200.00" style="width:120px"></div>
+              <div class="config-row"><div class="config-info"><div class="config-name">Requiere contraseña para clausura</div><div class="config-desc">Solo admin/supervisor puede cerrar el día</div></div><div class="switch on" onclick="this.classList.toggle('on')"></div></div>
+              <div class="config-row"><div class="config-info"><div class="config-name">Alertar si diferencia de caja supera</div><div class="config-desc">Tolerancia de cuadre de caja</div></div><div style="display:flex;align-items:center;gap:4px"><input class="form-input" value="5.00" style="width:80px"><span style="color:var(--text-dim);font-size:12px">USD</span></div></div>
+            </div>
+          </div>
+        </div>
+        <!-- KIOSK CONFIG (Verificador de Precios) -->
+        <div id="sec-kiosk-config" style="display:none">
+          <div class="page-title">Config Kiosk</div>
+          <div class="page-sub">Verificador de precios · pantalla cliente</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+            <div class="kds-station active">
+              <div class="kds-icon">🏷️</div>
+              <div class="kds-info"><div class="kds-name">Kiosk Principal</div><div class="kds-desc">192.168.1.60 · Activo</div></div>
+              <span class="badge badge-green">● Online</span>
+            </div>
+            <div class="kds-station">
+              <div class="kds-icon">🖥️</div>
+              <div class="kds-info"><div class="kds-name">Kiosk Secundario</div><div class="kds-desc">No configurado</div></div>
+              <span class="badge badge-gray">Offline</span>
+            </div>
+            <div class="kds-station" style="border-style:dashed;cursor:pointer">
+              <div class="kds-icon">➕</div>
+              <div class="kds-info"><div class="kds-name">Agregar pantalla</div><div class="kds-desc">Nueva pantalla cliente</div></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head"><div class="card-title">Parámetros del Kiosk</div></div>
+            <div class="config-section">
+              <div class="config-row">
+                <div class="config-info"><div class="config-name">Mostrar precio en Bs y USD</div><div class="config-desc">Muestra ambas monedas usando la tasa BCV activa</div></div>
+                <div class="switch on" onclick="this.classList.toggle('on')"></div>
+              </div>
+              <div class="config-row">
+                <div class="config-info"><div class="config-name">Mostrar imagen del producto</div><div class="config-desc">Requiere imagen cargada en el catálogo</div></div>
+                <div class="switch on" onclick="this.classList.toggle('on')"></div>
+              </div>
+              <div class="config-row">
+                <div class="config-info"><div class="config-name">Mostrar código de barras</div><div class="config-desc">Muestra EAN / UPC del producto escaneado</div></div>
+                <div class="switch" onclick="this.classList.toggle('on')"></div>
+              </div>
+              <div class="config-row">
+                <div class="config-info"><div class="config-name">Pantalla en reposo (seg)</div><div class="config-desc">Volver a pantalla de bienvenida tras inactividad</div></div>
+                <input class="form-input" value="30" style="width:80px;text-align:center">
+              </div>
+              <div class="config-row">
+                <div class="config-info"><div class="config-name">Mensaje de bienvenida</div><div class="config-desc">Texto en pantalla de reposo</div></div>
+                <input class="form-input" value="Escanee su producto para ver el precio" style="width:220px">
+              </div>
+              <div class="config-row">
+                <div class="config-info"><div class="config-name">Mostrar logo de la tienda</div><div class="config-desc">Logo en pantalla del verificador</div></div>
+                <div class="switch on" onclick="this.classList.toggle('on')"></div>
+              </div>
+              <div class="config-row">
+                <div class="config-info"><div class="config-name">Abrir Kiosk en nueva ventana</div><div class="config-desc">Pantalla dedicada para el cliente</div></div>
+                <button class="btn btn-primary btn-sm" onclick="window.open('zytek-kiosk.html','kiosk','width=800,height=600')">🏷️ Abrir Kiosk</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end pos-body -->
+
+<!-- ══ MODALS ══ -->
+<!-- Modal Pago -->
+<div class="modal-overlay" id="modal-pago">
+  <div class="modal">
+    <div class="modal-head"><div class="modal-title">💳 Formas de Pago</div><button class="modal-close" onclick="closeModal('modal-pago')">✕</button></div>
+    <div class="modal-body">
+      <div style="background:var(--surface2);border-radius:8px;padding:14px;margin-bottom:14px;text-align:center">
+        <div style="font-size:10px;font-family:'DM Mono',monospace;color:var(--text-dim);letter-spacing:2px;margin-bottom:4px">TOTAL A COBRAR</div>
+        <div style="font-family:'Fraunces',serif;font-size:32px;font-weight:700;color:var(--cyan)" id="modal-total-bs">0,00 Bs</div>
+        <div style="font-family:'DM Mono',monospace;font-size:14px;color:var(--green)" id="modal-total-usd">$0.00 USD</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+        <button class="btn btn-ghost" style="justify-content:center;padding:12px;font-size:13px" onclick="selectPago(this)">💵 Efectivo</button>
+        <button class="btn btn-ghost" style="justify-content:center;padding:12px;font-size:13px" onclick="selectPago(this)">💳 Tarjeta</button>
+        <button class="btn btn-ghost" style="justify-content:center;padding:12px;font-size:13px" onclick="selectPago(this)">🏦 Transferencia</button>
+        <button class="btn btn-ghost" style="justify-content:center;padding:12px;font-size:13px" onclick="selectPago(this)">💵 Zelle USD</button>
+        <button class="btn btn-ghost" style="justify-content:center;padding:12px;font-size:13px" onclick="selectPago(this)">₿ USDT</button>
+        <button class="btn btn-ghost" style="justify-content:center;padding:12px;font-size:13px" onclick="selectPago(this)">📱 QR</button>
+      </div>
+      <div class="form-group" style="margin-bottom:10px"><label class="form-label">Monto recibido</label><input class="form-input" placeholder="0.00" id="monto-recibido"></div>
+      <div class="form-group"><label class="form-label">Referencia / N° confirmación</label><input class="form-input" placeholder="Opcional"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-pago')">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmarPago()">✅ Confirmar cobro</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal BCV -->
+<div class="modal-overlay" id="modal-bcv">
+  <div class="modal">
+    <div class="modal-head"><div class="modal-title">💱 Tasa BCV</div><button class="modal-close" onclick="closeModal('modal-bcv')">✕</button></div>
+    <div class="modal-body">
+      <div style="background:var(--cyan-dim);border:1px solid rgba(0,212,255,0.3);border-radius:8px;padding:12px;margin-bottom:14px;font-size:12px;color:var(--cyan)">
+        🔄 Última actualización automática: Hoy 09:00am · BCV API
+      </div>
+      <div class="form-group" style="margin-bottom:10px"><label class="form-label">Tasa actual (Bs por $1 USD)</label><input class="form-input" id="bcv-modal-input" value="419.99" style="font-family:'DM Mono',monospace;font-size:18px;text-align:center"></div>
+      <div class="form-group"><label class="form-label">Fuente</label><select class="form-select"><option>BCV oficial (auto)</option><option>Manual (override)</option><option>Dólar paralelo</option></select></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-bcv')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveBCV()">💾 Guardar tasa</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Usuario -->
+<div class="modal-overlay" id="modal-usuario">
+  <div class="modal">
+    <div class="modal-head"><div class="modal-title">👤 Nuevo Usuario</div><button class="modal-close" onclick="closeModal('modal-usuario')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group"><label class="form-label">Nombre completo</label><input class="form-input" placeholder="Nombre y apellido"></div>
+        <div class="form-group"><label class="form-label">Usuario</label><input class="form-input" placeholder="nombre.usuario"></div>
+        <div class="form-group"><label class="form-label">Contraseña</label><input class="form-input" type="password" placeholder="••••••••"></div>
+        <div class="form-group"><label class="form-label">Confirmar contraseña</label><input class="form-input" type="password" placeholder="••••••••"></div>
+        <div class="form-group full"><label class="form-label">Rol</label>
+          <select class="form-select">
+            <option>Cajero — solo venta y cobro</option>
+            <option>Supervisor — venta + reportes + devoluciones</option>
+            <option>Admin — acceso completo excepto super admin</option>
+            <option>Super Admin — acceso total</option>
+          </select>
+        </div>
+        <div class="form-group full"><label class="form-label">PIN de caja (4 dígitos)</label><input class="form-input" type="password" maxlength="4" placeholder="••••" style="letter-spacing:8px;text-align:center"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-usuario')">Cancelar</button>
+      <button class="btn btn-primary">Crear usuario</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Producto -->
+<div class="modal-overlay" id="modal-producto">
+  <div class="modal">
+    <div class="modal-head"><div class="modal-title">📦 Nuevo Producto</div><button class="modal-close" onclick="closeModal('modal-producto')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group full"><label class="form-label">Nombre del producto</label><input class="form-input" placeholder="Descripción completa"></div>
+        <div class="form-group"><label class="form-label">SKU / Código</label><input class="form-input" placeholder="SKU-0000"></div>
+        <div class="form-group"><label class="form-label">Código de barras</label><input class="form-input" placeholder="EAN / UPC"></div>
+        <div class="form-group"><label class="form-label">Categoría</label><select class="form-select"><option>Electrónica</option><option>Ropa</option><option>Alimentos</option><option>Hogar</option><option>Salud</option></select></div>
+        <div class="form-group"><label class="form-label">Tipo (TP)</label><select class="form-select"><option>Bien</option><option>Servicio</option><option>Exento</option></select></div>
+        <div class="form-group"><label class="form-label">Precio costo (USD)</label><input class="form-input" placeholder="$0.00"></div>
+        <div class="form-group"><label class="form-label">Precio venta (USD)</label><input class="form-input" placeholder="$0.00"></div>
+        <div class="form-group"><label class="form-label">Stock inicial</label><input class="form-input" type="number" placeholder="0"></div>
+        <div class="form-group"><label class="form-label">Stock mínimo (alerta)</label><input class="form-input" type="number" placeholder="5"></div>
+        <div class="form-group"><label class="form-label">IVA aplicable</label><select class="form-select"><option>16% — General</option><option>8% — Reducido</option><option>0% — Exento</option></select></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-producto')">Cancelar</button>
+      <button class="btn btn-primary">Guardar producto</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Proveedor -->
+<div class="modal-overlay" id="modal-proveedor">
+  <div class="modal">
+    <div class="modal-head"><div class="modal-title">🏭 Nuevo Proveedor</div><button class="modal-close" onclick="closeModal('modal-proveedor')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group full"><label class="form-label">Razón social</label><input class="form-input" placeholder="Nombre del proveedor"></div>
+        <div class="form-group"><label class="form-label">RIF / RFC / CUIT</label><input class="form-input" placeholder="J-00000000-0"></div>
+        <div class="form-group"><label class="form-label">País</label><select class="form-select"><option>🇻🇪 Venezuela</option><option>🇲🇽 México</option><option>🇨🇴 Colombia</option><option>🇦🇷 Argentina ⚠️</option><option>🇵🇪 Perú</option><option>🇺🇸 USA</option></select></div>
+        <div class="form-group"><label class="form-label">Teléfono</label><input class="form-input" placeholder="+58 000 000 0000"></div>
+        <div class="form-group"><label class="form-label">Email</label><input class="form-input" type="email" placeholder="proveedor@email.com"></div>
+        <div class="form-group"><label class="form-label">Método de pago preferido</label><select class="form-select"><option>Transferencia</option><option>Zelle (USD)</option><option>USDT</option><option>Efectivo</option></select></div>
+        <div class="form-group"><label class="form-label">Días de crédito</label><input class="form-input" type="number" value="30"></div>
+        <div class="form-group"><label class="form-label">Categoría de productos</label><select class="form-select"><option>Electrónica</option><option>Ropa</option><option>Alimentos</option><option>Hogar</option><option>Mixto</option></select></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-proveedor')">Cancelar</button>
+      <button class="btn btn-primary">Guardar proveedor</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal OC -->
+<div class="modal-overlay" id="modal-oc">
+  <div class="modal">
+    <div class="modal-head"><div class="modal-title">📋 Nueva Orden de Compra</div><button class="modal-close" onclick="closeModal('modal-oc')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group full"><label class="form-label">Proveedor</label><select class="form-select"><option>TechDistrib MX</option><option>TextilBaires AR ⚠️</option><option>AgroDistrib VE ⚠️</option><option>IluminaTech CO</option></select></div>
+        <div class="form-group"><label class="form-label">Fecha emisión</label><input class="form-input" type="date"></div>
+        <div class="form-group"><label class="form-label">Fecha vencimiento</label><input class="form-input" type="date"></div>
+        <div class="form-group"><label class="form-label">Monto total (USD)</label><input class="form-input" placeholder="$0.00"></div>
+        <div class="form-group"><label class="form-label">Método de pago</label><select class="form-select"><option>Transferencia</option><option>Zelle (USD)</option><option>USDT</option><option>Efectivo</option></select></div>
+        <div class="form-group full"><label class="form-label">Descripción / Productos</label><textarea class="form-input" style="height:70px;resize:none" placeholder="Lista de productos a comprar..."></textarea></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-oc')">Cancelar</button>
+      <button class="btn btn-primary">Crear OC</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal F-key genérico -->
+<div class="modal-overlay" id="modal-fkey">
+  <div class="modal">
+    <div class="modal-head"><div class="modal-title" id="fkey-modal-title">Acción</div><button class="modal-close" onclick="closeModal('modal-fkey')">✕</button></div>
+    <div class="modal-body"><div id="fkey-modal-body" style="color:var(--text-mid);font-size:13px;text-align:center;padding:20px"></div></div>
+    <div class="modal-footer"><button class="btn btn-primary" onclick="closeModal('modal-fkey')">Cerrar</button></div>
+  </div>
+</div>
+
+<script>
+
+(async () => { // ZytekOS async license init
+// ════════════════════════════════════════════════════════════════
+//  ZYTEK OS v2.0 — CORE INTEGRATION
+//  Módulo: retail
+// ════════════════════════════════════════════════════════════════
+
+// Detectar contexto de ejecución
+const _URL_PARAMS   = new URLSearchParams(window.location.search);
+const _FROM_SHELL   = _URL_PARAMS.get('fromShell') === '1';
+const _FROM_NEXT    = _URL_PARAMS.get('fromNext')  === '1';  // corriendo en Next.js iframe
+const _TENANT_NAME  = _URL_PARAMS.get('tenant') || 'Demo';
+const _TENANT_PLAN  = _URL_PARAMS.get('plan')   || 'pro';
+
+// Si viene de Next.js, la licencia ya fue validada por LicenseGate
+// Saltar la LicenseWall para no bloquear la pantalla de PIN
+const _Core = await ZytekCore.init('retail', {
+  skipLicense: _FROM_NEXT || _FROM_SHELL
+});
+const _Bus  = _Core.EventBus;
+const _IDB  = _Core.IDB;
+const _Sync = _Core.SyncService;
+const _Reg  = _Core.ModuleRegistry;
+const _SS   = _Core.StateService;
+
+// Alias de compatibilidad — mantiene todas las llamadas existentes funcionando
+// Las funciones originales setText/setHtml/etc se preservan, el core las refuerza
+if(typeof setText==='undefined')   window.setText   = _Core.DOM.setText.bind(_Core.DOM);
+if(typeof setHtml==='undefined')   window.setHtml   = _Core.DOM.setHtml.bind(_Core.DOM);
+if(typeof setDisp==='undefined')   window.setDisp   = _Core.DOM.setDisp.bind(_Core.DOM);
+if(typeof openModal==='undefined') window.openModal = _Core.DOM.openModal.bind(_Core.DOM);
+if(typeof closeModal==='undefined')window.closeModal= _Core.DOM.closeModal.bind(_Core.DOM);
+if(typeof flash==='undefined')     window.flash     = _Core.DOM.flash.bind(_Core.DOM);
+if(typeof money==='undefined')     window.money     = _Core.Fmt.money.bind(_Core.Fmt);
+if(typeof tb==='undefined')        window.tb        = _Core.Fmt.tb.bind(_Core.Fmt);
+if(typeof badge==='undefined')     window.badge     = _Core.Fmt.badge.bind(_Core.Fmt);
+if(typeof genId==='undefined')     window.genId     = _Core.Fmt.genId.bind(_Core.Fmt);
+
+// Escuchar eventos entrantes del shell (cuando corre en iframe)
+window.addEventListener('message', e => {
+  if(!e.data?.zytek) return;
+  _Bus._dispatch(e.data);
+});
+
+// Re-publicar eventos del bus hacia el shell
+const _origBusEmit = _Bus.emit.bind(_Bus);
+_Bus.emit = function(event, payload, persist) {
+  _origBusEmit(event, payload, persist);
+  if(window.parent !== window) {
+    try { window.parent.postMessage({ zytek:true, event, payload }, '*'); } catch(_){}
+  }
+};
+
+// ══ PRODUCTS DATA ══
+const PRODUCTS = [
+  {code:'SKU-0041',name:'Samsung A54 128GB',cat:'Electrónica',price:599,tp:'Bien',emoji:'📱'},
+  {code:'SKU-0067',name:'Audífonos BT Pro',cat:'Electrónica',price:49,tp:'Bien',emoji:'🎧'},
+  {code:'SKU-0023',name:'Nike Air Max T42',cat:'Calzado',price:120,tp:'Bien',emoji:'👟'},
+  {code:'SKU-0031',name:'Camiseta Nike Dry',cat:'Ropa',price:35,tp:'Bien',emoji:'👕'},
+  {code:'SKU-0112',name:'Café molido 1kg',cat:'Alimentos',price:18,tp:'Bien',emoji:'☕'},
+  {code:'SKU-0089',name:'Shampoo Keratina',cat:'Salud',price:12,tp:'Bien',emoji:'🧴'},
+  {code:'SKU-0055',name:'Bombillo LED 12W',cat:'Hogar',price:8,tp:'Bien',emoji:'💡'},
+  {code:'SKU-0091',name:'Tablet 10"',cat:'Electrónica',price:280,tp:'Bien',emoji:'💻'},
+  {code:'SKU-0101',name:'Mouse Inalámbrico',cat:'Electrónica',price:25,tp:'Bien',emoji:'🖱️'},
+  {code:'SKU-0115',name:'Aceite de Oliva 1L',cat:'Alimentos',price:14,tp:'Exento',emoji:'🫒'},
+  {code:'SKU-0120',name:'Toalla Baño Grande',cat:'Hogar',price:22,tp:'Bien',emoji:'🏊'},
+  {code:'SKU-0130',name:'Vitaminas C 100cp',cat:'Salud',price:16,tp:'Exento',emoji:'💊'},
+];
+
+let cart = [];
+let bcvRate = 419.99;
+
+// ══ CLOCK ══
+function updateClock(){
+  const now = new Date();
+  const d = now.toLocaleDateString('es-VE',{day:'2-digit',month:'2-digit',year:'numeric'});
+  const t = now.toLocaleTimeString('es-VE',{hour:'2-digit',minute:'2-digit'});
+  document.getElementById('date-val').textContent = d;
+  document.getElementById('time-val').textContent = t;
+}
+setInterval(updateClock,1000); updateClock();
+
+// ══ BCV ══
+function updateBCV(val){
+  const v = parseFloat(val);
+  if(!isNaN(v) && v > 0){
+    bcvRate = v;
+    renderTotals();
+    document.getElementById('bcv-status').textContent = '● manual';
+    document.getElementById('cfg-bcv') && (document.getElementById('cfg-bcv').value = v.toFixed(2));
+  }
+}
+function saveBCV(){
+  const v = parseFloat(document.getElementById('bcv-modal-input').value);
+  if(!isNaN(v)){
+    bcvRate = v;
+    document.getElementById('bcv-input').value = v.toFixed(2);
+    renderTotals();
+  }
+  closeModal('modal-bcv');
+}
+// Click on BCV to edit
+document.querySelector('.bcv-block').addEventListener('click',()=>openModal('modal-bcv'));
+
+// ══ THEME ══
+function toggleTheme(){
+  const html = document.documentElement;
+  const isDark = html.getAttribute('data-theme') === 'dark';
+  html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+  document.querySelector('.theme-btn').textContent = isDark ? '🌙' : '☀️';
+}
+
+// ══ VIEWS ══
+function switchView(id, el){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('view-'+id).classList.add('active');
+  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  // init admin sections
+  if(id==='admin') initPermMatrix();
+  if(id==='admin') renderLogs();
+}
+
+function switchAdminSection(el, sectionId){
+  const parent = el.closest('.admin-layout');
+  parent.querySelectorAll('.admin-nav-item').forEach(i=>i.classList.remove('active'));
+  el.classList.add('active');
+  const content = parent.querySelector('.admin-content');
+  content.children && Array.from(content.children).forEach(c=>c.style.display='none');
+  const sec = document.getElementById(sectionId);
+  if(sec) sec.style.display = 'block';
+}
+
+// ══ PRODUCT SEARCH ══
+function filterProducts(q){
+  const panel = document.getElementById('prod-quick-panel');
+  const grid = document.getElementById('prod-quick-grid');
+  if(!q || q.length < 1){ panel.style.display='none'; return; }
+  const filtered = PRODUCTS.filter(p =>
+    p.name.toLowerCase().includes(q.toLowerCase()) ||
+    p.code.toLowerCase().includes(q.toLowerCase()) ||
+    p.cat.toLowerCase().includes(q.toLowerCase())
+  );
+  if(filtered.length === 0){ panel.style.display='none'; return; }
+  panel.style.display = 'block';
+  grid.innerHTML = filtered.map(p => `
+    <div class="prod-card" onclick="addToSale('${p.code}')">
+      <div class="prod-em">${p.emoji}</div>
+      <div class="prod-name">${p.name}</div>
+      <div class="prod-price">$${p.price.toFixed(2)}</div>
+    </div>`).join('');
+}
+
+function handleSearchKey(e){
+  if(e.key === 'Enter'){
+    const q = e.target.value.trim();
+    const match = PRODUCTS.find(p => p.code.toLowerCase() === q.toLowerCase() || p.name.toLowerCase() === q.toLowerCase());
+    if(match){ addToSale(match.code); e.target.value=''; filterProducts(''); }
+  }
+}
+
+function addToSale(code){
+  const p = PRODUCTS.find(x=>x.code===code);
+  if(!p) return;
+  const existing = cart.find(i=>i.code===code);
+  if(existing){ existing.qty++; } else { cart.push({...p, qty:1}); }
+  renderSaleTable();
+  document.getElementById('search-input').value = '';
+  document.getElementById('prod-quick-panel').style.display = 'none';
+}
+
+function removeFromSale(code){
+  cart = cart.filter(i=>i.code!==code);
+  renderSaleTable();
+}
+
+function changeQty(code, delta){
+  const item = cart.find(i=>i.code===code);
+  if(!item) return;
+  item.qty += delta;
+  if(item.qty <= 0) cart = cart.filter(i=>i.code!==code);
+  renderSaleTable();
+}
+
+function renderSaleTable(){
+  const tbody = document.getElementById('sale-tbody');
+  const empty = document.getElementById('empty-row');
+  if(cart.length === 0){
+    tbody.innerHTML = '<tr class="empty-row" id="empty-row"><td colspan="8">— SIN PRODUCTOS EN LA VENTA —</td></tr>';
+    renderTotals(); return;
+  }
+  tbody.innerHTML = cart.map(item => {
+    const total = item.price * item.qty;
+    const priceBs = item.price * bcvRate;
+    const totalBs = total * bcvRate;
+    return `<tr>
+      <td class="td-code">${item.code}</td>
+      <td class="td-cant">
+        <div style="display:flex;align-items:center;gap:4px;justify-content:center">
+          <button onclick="changeQty('${item.code}',-1)" style="width:18px;height:18px;border-radius:4px;border:1px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center">−</button>
+          <span style="font-family:'DM Mono',monospace;min-width:20px;text-align:center">${item.qty}</span>
+          <button onclick="changeQty('${item.code}',1)" style="width:18px;height:18px;border-radius:4px;border:1px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center">+</button>
+        </div>
+      </td>
+      <td class="td-cat">${item.cat}</td>
+      <td class="td-desc">${item.emoji} ${item.name}</td>
+      <td class="td-tp">${item.tp}</td>
+      <td class="td-pu">${priceBs.toLocaleString('es-VE',{minimumFractionDigits:2})} Bs</td>
+      <td class="td-pt">${totalBs.toLocaleString('es-VE',{minimumFractionDigits:2})} Bs</td>
+      <td class="td-del"><button class="del-btn" onclick="removeFromSale('${item.code}')">✕</button></td>
+    </tr>`;
+  }).join('');
+  renderTotals();
+}
+
+function renderTotals(){
+  const subUSD = cart.reduce((s,i)=>s+(i.price*i.qty),0);
+  const ivaUSD = subUSD * 0.16;
+  const totalUSD = subUSD + ivaUSD;
+  const subBs = subUSD * bcvRate;
+  const ivaBs = ivaUSD * bcvRate;
+  const totalBs = totalUSD * bcvRate;
+  document.getElementById('t-sub').textContent = subBs.toLocaleString('es-VE',{minimumFractionDigits:2}) + ' Bs';
+  document.getElementById('t-iva').textContent = ivaBs.toLocaleString('es-VE',{minimumFractionDigits:2}) + ' Bs';
+  document.getElementById('t-total-bs').textContent = totalBs.toLocaleString('es-VE',{minimumFractionDigits:2});
+  document.getElementById('t-total-usd').textContent = '$' + totalUSD.toFixed(2);
+  // modal totals
+  document.getElementById('modal-total-bs').textContent = totalBs.toLocaleString('es-VE',{minimumFractionDigits:2}) + ' Bs';
+  document.getElementById('modal-total-usd').textContent = '$' + totalUSD.toFixed(2) + ' USD';
+}
+
+// ══ FKEYS ══
+const FKEY_INFO = {
+  fichas:['F1 — Fichas de Clientes','Busca y carga datos del cliente en la venta actual.'],
+  pago:null, // opens modal-pago
+  anular:['F3 — Anular Venta','¿Confirmar anulación de la venta actual? Esta acción requiere autorización de supervisor.'],
+  existencias:['F4 — Existencias','Consultar stock disponible de cualquier producto en tiempo real.'],
+  suspender:['F5 — Suspender Venta','La venta queda guardada. Puedes atender otra caja y retomar después con F6.'],
+  retomar:['F6 — Retomar Venta Suspendida','Selecciona la venta suspendida que deseas retomar.'],
+  opciones:['F7 — Opciones de Venta','Descuentos, notas internas, tipo de documento fiscal.'],
+  anulardoc:['F8 — Anular Documento','Anula un documento ya emitido. Requiere número de factura y contraseña.'],
+  monto:['F10 — Monto Total','Consulta rápida del total de la venta con desglose por impuestos.'],
+  revision:['F11 — Revisión de Caja','Muestra el estado actual del turno: efectivo, tarjetas, totales.'],
+  clausura:['F12 — Clausura del Día','Cierra el turno actual y genera el reporte Z de cierre fiscal.'],
+  salir:['ESC — Salir','¿Confirmar salida del sistema? Se requiere contraseña de supervisor.'],
+};
+
+function fkey(action){
+  if(action === 'pago'){ openModal('modal-pago'); return; }
+  const info = FKEY_INFO[action];
+  if(info){
+    document.getElementById('fkey-modal-title').textContent = info[0];
+    document.getElementById('fkey-modal-body').innerHTML = `<p>${info[1]}</p>`;
+    openModal('modal-fkey');
+  }
+}
+
+function selectPago(btn){
+  document.querySelectorAll('#modal-pago .btn').forEach(b=>b.classList.remove('btn-primary'));
+  document.querySelectorAll('#modal-pago .btn').forEach(b=>b.classList.add('btn-ghost'));
+  btn.classList.remove('btn-ghost'); btn.classList.add('btn-primary');
+}
+
+function confirmarPago(){
+  cart = []; renderSaleTable();
+  document.getElementById('f-cliente').value='';
+  document.getElementById('f-rif').value='';
+  document.getElementById('f-tel').value='';
+  document.getElementById('f-dir').value='';
+  document.getElementById('f-obs').value='';
+  closeModal('modal-pago');
+  // show success flash
+  const flash = document.createElement('div');
+  flash.style.cssText='position:fixed;top:80px;left:50%;transform:translateX(-50%);background:#00e57a;color:#000;padding:10px 24px;border-radius:8px;font-weight:700;font-family:DM Mono,monospace;z-index:999;font-size:13px;animation:fadeOut 2s forwards';
+  flash.textContent = '✅ VENTA PROCESADA EXITOSAMENTE';
+  document.body.appendChild(flash);
+  setTimeout(()=>flash.remove(),2200);
+}
+
+// ══ PERMISSIONS MATRIX ══
+const PERM_ROWS = [
+  {label:'Venta — realizar cobro',sa:true,adm:true,sup:true,caj:true},
+  {label:'Venta — anular venta',sa:true,adm:true,sup:true,caj:false},
+  {label:'Venta — descuentos',sa:true,adm:true,sup:true,caj:false},
+  {label:'Inventario — ver stock',sa:true,adm:true,sup:true,caj:true},
+  {label:'Inventario — editar',sa:true,adm:true,sup:false,caj:false},
+  {label:'Productos — crear/editar',sa:true,adm:true,sup:false,caj:false},
+  {label:'Compras — órdenes',sa:true,adm:true,sup:false,caj:false},
+  {label:'Caja — clausura día',sa:true,adm:true,sup:true,caj:false},
+  {label:'Admin — usuarios',sa:true,adm:true,sup:false,caj:false},
+  {label:'Admin — permisos',sa:true,adm:false,sup:false,caj:false},
+  {label:'Config — caja',sa:true,adm:true,sup:false,caj:false},
+  {label:'Reportes — ver',sa:true,adm:true,sup:true,caj:false},
+];
+
+function initPermMatrix(){
+  const tbody = document.getElementById('perm-tbody');
+  if(!tbody || tbody.children.length > 0) return;
+  tbody.innerHTML = PERM_ROWS.map(row=>`
+    <tr>
+      <td style="color:var(--text);font-size:12px">${row.label}</td>
+      <td><div class="perm-check on" onclick="this.classList.toggle('on');this.textContent=this.classList.contains('on')?'✓':''" style="margin:auto">✓</div></td>
+      <td><div class="perm-check ${row.adm?'on':''}" onclick="this.classList.toggle('on');this.textContent=this.classList.contains('on')?'✓':''" style="margin:auto">${row.adm?'✓':''}</div></td>
+      <td><div class="perm-check ${row.sup?'on':''}" onclick="this.classList.toggle('on');this.textContent=this.classList.contains('on')?'✓':''" style="margin:auto">${row.sup?'✓':''}</div></td>
+      <td><div class="perm-check ${row.caj?'on':''}" onclick="this.classList.toggle('on');this.textContent=this.classList.contains('on')?'✓':''" style="margin:auto">${row.caj?'✓':''}</div></td>
+    </tr>`).join('');
+}
+
+// ══ AUDIT LOGS ══
+const LOGS = [
+  {time:'10:42',user:'dfornerino',action:'Venta procesada — $614.00 USD · F-0041',module:'VENTA',color:'var(--green)'},
+  {time:'10:38',user:'cajero01',action:'Producto editado — SKU-0041 Samsung A54 precio actualizado',module:'PRODUCTOS',color:'var(--blue)'},
+  {time:'10:22',user:'supervisor',action:'Descuento aplicado 15% en venta F-0040 — autorizado',module:'VENTA',color:'var(--amber)'},
+  {time:'10:18',user:'cajero01',action:'Venta procesada — $155.00 USD vía Zelle VE',module:'VENTA',color:'var(--green)'},
+  {time:'10:05',user:'dfornerino',action:'Tasa BCV actualizada manualmente: 415.00 → 419.99 Bs/$',module:'CONFIG',color:'var(--cyan)'},
+  {time:'09:55',user:'cajero02',action:'Intento de acceso fallido — contraseña incorrecta (2 intentos)',module:'ADMIN',color:'var(--red)'},
+  {time:'09:42',user:'dfornerino',action:'Sesión iniciada — Super Admin · IP 192.168.1.10',module:'SISTEMA',color:'var(--blue)'},
+  {time:'08:00',user:'cajero01',action:'Apertura de caja — monto inicial $200.00',module:'CAJA',color:'var(--green)'},
+];
+
+function renderLogs(){
+  const container = document.getElementById('log-container');
+  if(!container) return;
+  container.innerHTML = LOGS.map(log=>`
+    <div class="log-row">
+      <div class="log-dot" style="background:${log.color}"></div>
+      <div class="log-time">${log.time}</div>
+      <div class="log-user">${log.user}</div>
+      <div class="log-action">${log.action}</div>
+      <div class="log-module">${log.module}</div>
+    </div>`).join('');
+}
+
+// ══ MODALS ══
+function openModal(id){ document.getElementById(id).classList.add('open'); }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(m=>{
+  m.addEventListener('click',function(e){ if(e.target===this) this.classList.remove('open'); });
+});
+
+// ══ CSS ANIMATION ══
+const style = document.createElement('style');
+style.textContent = '@keyframes fadeOut{0%{opacity:1;transform:translateX(-50%) translateY(0)}80%{opacity:1}100%{opacity:0;transform:translateX(-50%) translateY(-20px)}}';
+document.head.appendChild(style);
+
+// ════════════════════════════════════════════════════════
+//  RETAIL → EventBus integration (v2.0)
+// ════════════════════════════════════════════════════════
+
+(function(){
+  const _origPago = window.confirmarPago;
+  if(typeof _origPago !== 'function') return;
+  window.confirmarPago = async function() {
+    _origPago.apply(this, arguments);
+    _Bus.emit('venta.cerrada', { ts: Date.now(), origen: 'retail' });
+  };
+})();
+
+_Reg.register('retail', {
+  name: 'POS Retail',
+  version: '2.0.0',
+  standalone: true,
+  api: { getProducts: () => typeof PRODUCTS !== 'undefined' ? PRODUCTS : [] }
+});
+
+console.info('[ZytekOS] Retail v2.0 listo · Core integrado');
+})(); // end ZytekOS async init
+
+</script>
+</body>
+</html>

@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ZytekOS — CRM</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@700;900&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="zytek-core.js"></script>
+<style>
+/* ── INHERITED FROM DESIGN SYSTEM ── */
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--font);height:100vh;overflow:hidden;display:flex;flex-direction:column}
+/* STANDALONE TOPBAR — solo aparece si no viene del shell */
+.sa-topbar{height:50px;background:var(--topbar);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:0 18px;flex-shrink:0}
+.sa-brand{font-family:var(--serif);font-weight:700;font-size:13px;color:var(--text)}
+.sa-sub{font-size:9px;font-family:var(--mono);color:var(--text-dim);letter-spacing:2px}
+.dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+/* LAYOUT */
+.crm-layout{display:grid;grid-template-columns:220px 1fr;flex:1;overflow:hidden}
+/* SIDEBAR */
+.crm-sb{background:var(--surface);border-right:1px solid var(--border);overflow-y:auto;display:flex;flex-direction:column}
+.sb-section{padding:10px 14px 3px;font-size:9px;font-family:var(--mono);color:var(--text-dim);letter-spacing:2px}
+.sb-item{padding:8px 14px;display:flex;align-items:center;gap:8px;cursor:pointer;border-left:2px solid transparent;transition:all .13s;font-size:11px;color:var(--text-mid)}
+.sb-item:hover{background:var(--surface2)}
+.sb-item.active{background:var(--orange-dim);color:var(--orange);border-left-color:var(--orange)}
+.sb-item .ico{font-size:14px;width:18px;text-align:center}
+/* CONTENT */
+.crm-content{overflow-y:auto;padding:20px}
+.page-title{font-family:var(--serif);font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px}
+.page-sub{font-size:11px;color:var(--text-dim);font-family:var(--mono);margin-bottom:16px}
+/* CARDS, TABLES, BADGES — same as admin */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:14px;overflow:hidden}
+.card-head{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;border-bottom:1px solid var(--border)}
+.card-title{font-size:12px;font-weight:700;color:var(--text)}
+.kpi-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.kpi{background:var(--surface2);border-radius:8px;padding:12px 16px;flex:1;min-width:120px}
+.kpi-label{font-size:9px;font-family:var(--mono);letter-spacing:1px;color:var(--text-dim);margin-bottom:4px;text-transform:uppercase}
+.kpi-val{font-size:22px;font-weight:700;font-family:var(--serif);color:var(--text)}
+.btn{padding:6px 14px;border-radius:7px;border:none;cursor:pointer;font-size:12px;font-weight:600;font-family:var(--font);transition:all .13s}
+.btn-primary{background:var(--orange);color:#fff}.btn-primary:hover{opacity:.88}
+.btn-ghost{background:transparent;color:var(--text-mid);border:1px solid var(--border)}.btn-ghost:hover{border-color:var(--orange);color:var(--orange)}
+.btn-red{background:var(--red-dim);color:var(--red);border:1px solid var(--red-b)}
+.btn-sm{padding:4px 9px;font-size:10px}
+.badge{display:inline-flex;align-items:center;font-size:10px;font-family:var(--mono);padding:2px 7px;border-radius:5px}
+.b-green{background:var(--green-dim);color:var(--green);border:1px solid var(--green-b)}
+.b-amber{background:var(--amber-dim);color:var(--amber);border:1px solid var(--amber-b)}
+.b-red{background:var(--red-dim);color:var(--red);border:1px solid var(--red-b)}
+.b-blue{background:var(--blue-dim);color:var(--blue);border:1px solid var(--blue-b)}
+.b-purple{background:var(--purple-dim);color:var(--purple);border:1px solid var(--purple-b)}
+.rep-table{width:100%;border-collapse:collapse;font-size:11px}
+.rep-table th{text-align:left;padding:7px 10px;font-size:9px;font-family:var(--mono);letter-spacing:1px;border-bottom:1px solid var(--border2);color:var(--text-dim);font-weight:400}
+.rep-table td{padding:8px 10px;border-bottom:1px solid var(--border)}
+.rep-table tr:hover td{background:var(--surface2)}
+.modal-overlay{position:fixed;inset:0;z-index:900;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border2);border-radius:14px;padding:22px;width:100%;max-width:480px}
+.modal-head{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px}
+.modal-title{font-size:15px;font-weight:700;color:var(--text)}
+.modal-close{background:none;border:none;color:var(--text-dim);font-size:18px;cursor:pointer;padding:0}
+.modal-foot{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;padding-top:14px;border-top:1px solid var(--border)}
+.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.fgroup{display:flex;flex-direction:column;gap:4px}.fgroup.full{grid-column:1/-1}
+.flabel{font-size:10px;font-family:var(--mono);letter-spacing:1px;color:var(--text-dim);text-transform:uppercase}
+.finput,.fselect{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;font-family:var(--font);outline:none;width:100%}
+.finput:focus,.fselect:focus{border-color:var(--orange)}
+/* SYNC BADGE */
+.sync-badge{font-size:9px;font-family:var(--mono);padding:2px 7px;border-radius:10px;display:inline-flex;align-items:center;gap:4px}
+.sync-ok{background:var(--green-dim);color:var(--green);border:1px solid var(--green-b)}
+.sync-pending{background:var(--amber-dim);color:var(--amber);border:1px solid var(--amber-b)}
+.sync-offline{background:var(--red-dim);color:var(--red);border:1px solid var(--red-b)}
+/* KANBAN LEADS */
+.kanban{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:10px}
+.kanban-col{background:var(--surface2);border-radius:8px;padding:10px}
+.kanban-hdr{font-size:10px;font-family:var(--mono);color:var(--text-dim);letter-spacing:1px;padding:4px 0 8px;text-transform:uppercase;display:flex;justify-content:space-between}
+.lead-card{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:10px;margin-bottom:7px;cursor:pointer;transition:all .13s}
+.lead-card:hover{border-color:var(--orange-b)}
+/* FIDELIZACIÓN */
+.nivel-card{padding:10px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border)}
+.nivel-ico{font-size:20px;width:28px;text-align:center}
+/* INTEGRATION NOTICE */
+.integration-banner{background:var(--green-dim);border:1px solid var(--green-b);border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px;margin-bottom:14px;font-size:11px;color:var(--green)}
+</style>
+</head>
+<body>
+
+<!-- Topbar standalone (se oculta si viene del shell) -->
+<div class="sa-topbar" id="sa-topbar">
+  <div style="width:28px;height:28px;background:var(--purple);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px">👥</div>
+  <div><div class="sa-brand">ZytekOS — CRM</div><div class="sa-sub">STANDALONE · CLIENTES · CxC · LEADS</div></div>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+    <div class="dot" id="crm-net-dot" style="background:var(--amber)"></div>
+    <span style="font-size:10px;font-family:var(--mono);color:var(--text-dim)" id="crm-net-txt">verificando</span>
+    <span class="sync-badge sync-ok" id="crm-sync-badge">● sincronizado</span>
+  </div>
+</div>
+
+<!-- LAYOUT PRINCIPAL -->
+<div class="crm-layout">
+  <!-- SIDEBAR -->
+  <div class="crm-sb">
+    <div class="sb-section">CLIENTES</div>
+    <div class="sb-item active" id="sb-directorio" onclick="crmNav(this,'directorio')"><span class="ico">👤</span>Directorio</div>
+    <div class="sb-item" id="sb-cxc"        onclick="crmNav(this,'cxc')"><span class="ico">💳</span>Cuentas por Cobrar</div>
+    <div class="sb-item" id="sb-adelantos"  onclick="crmNav(this,'adelantos')"><span class="ico">💰</span>Adelantos</div>
+    <div class="sb-section">VENTAS</div>
+    <div class="sb-item" id="sb-leads"      onclick="crmNav(this,'leads')"><span class="ico">📋</span>Leads / Pipeline</div>
+    <div class="sb-item" id="sb-fidelizacion" onclick="crmNav(this,'fidelizacion')"><span class="ico">⭐</span>Fidelización</div>
+    <div class="sb-section">REPORTES</div>
+    <div class="sb-item" id="sb-rep-clientes" onclick="crmNav(this,'rep-clientes')"><span class="ico">📊</span>Análisis de clientes</div>
+    <div class="sb-item" id="sb-rep-retencion" onclick="crmNav(this,'rep-retencion')"><span class="ico">📈</span>Retención</div>
+    <div class="sb-section">CONFIGURACIÓN</div>
+    <div class="sb-item" id="sb-config"     onclick="crmNav(this,'config')"><span class="ico">⚙️</span>Config CRM</div>
+    <div class="sb-item" id="sb-integracion" onclick="crmNav(this,'integracion')"><span class="ico">🔗</span>Integración módulos</div>
+
+    <div style="margin-top:auto;padding:12px 14px;border-top:1px solid var(--border)">
+      <div style="font-size:9px;font-family:var(--mono);color:var(--text-dim);margin-bottom:6px">DATOS</div>
+      <div id="crm-data-source" style="font-size:10px;font-family:var(--mono);color:var(--text-dim)">cargando...</div>
+    </div>
+  </div>
+
+  <!-- CONTENIDO -->
+  <div class="crm-content" id="crm-content">
+    <!-- Se renderiza por JS según la vista activa -->
+  </div>
+</div>
+
+<!-- MODALES -->
+<div class="modal-overlay" id="modal-cliente">
+  <div class="modal">
+    <div class="modal-head">
+      <div><div class="modal-title" id="modal-cli-title">Nuevo cliente</div></div>
+      <button class="modal-close" onclick="CRM.closeModal('modal-cliente')">✕</button>
+    </div>
+    <div class="fgrid" id="modal-cli-body" style="gap:10px"></div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="CRM.closeModal('modal-cliente')">Cancelar</button>
+      <button class="btn btn-primary" onclick="CRM.guardarCliente()">💾 Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-cxc">
+  <div class="modal">
+    <div class="modal-head">
+      <div><div class="modal-title">Nueva cuenta por cobrar</div></div>
+      <button class="modal-close" onclick="CRM.closeModal('modal-cxc')">✕</button>
+    </div>
+    <div class="fgrid" id="modal-cxc-body" style="gap:10px"></div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="CRM.closeModal('modal-cxc')">Cancelar</button>
+      <button class="btn btn-primary" onclick="CRM.guardarCxC()">💾 Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-lead">
+  <div class="modal">
+    <div class="modal-head">
+      <div><div class="modal-title" id="modal-lead-title">Nuevo lead</div></div>
+      <button class="modal-close" onclick="CRM.closeModal('modal-lead')">✕</button>
+    </div>
+    <div class="fgrid" id="modal-lead-body" style="gap:10px"></div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="CRM.closeModal('modal-lead')">Cancelar</button>
+      <button class="btn btn-primary" onclick="CRM.guardarLead()">💾 Guardar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(async () => {
+'use strict';
+// ── Detectar si viene del shell ──────────────────────────────────
+const urlParams = new URLSearchParams(window.location.search);
+const FROM_SHELL = urlParams.get('fromShell') === '1';
+if(FROM_SHELL) document.getElementById('sa-topbar').style.display='none';
+
+// ── Inicializar core ─────────────────────────────────────────────
+const _FROM_NEXT_CRM = new URLSearchParams(window.location.search).get('fromNext') === '1';
+const Core = await ZytekCore.init('crm', { skipLicense: _FROM_NEXT_CRM || FROM_SHELL });
+const { DOM, Fmt, StateService, EventBus, IDB, SyncService, SupabaseService, ModuleRegistry } = Core;
+
+// ── DATOS DEL CRM ────────────────────────────────────────────────
+const CLI_DATA = {
+  clientes:[
+    {id:'c001',nombre:'Rafael Torres',tel:'0414-1234567',email:'rafael@mail.com',visitas:14,gasto:428.00,ultima:'hoy',cxc:45.00,adelanto:0,puntos:280,tipo:'frecuente',nivel:'Oro',estado:'Activo'},
+    {id:'c002',nombre:'Carmen Díaz',tel:'0416-2345678',email:'carmen@mail.com',visitas:11,gasto:310.50,ultima:'ayer',cxc:0,adelanto:50.00,puntos:185,tipo:'frecuente',nivel:'Plata',estado:'Activo'},
+    {id:'c003',nombre:'José Martín',tel:'0412-3456789',email:'jose@mail.com',visitas:9,gasto:298.00,ultima:'hace 2 días',cxc:67.00,adelanto:0,puntos:150,tipo:'credito',nivel:'Plata',estado:'Activo'},
+    {id:'c004',nombre:'Ana Rodríguez',tel:'0424-4567890',email:'ana@mail.com',visitas:7,gasto:189.00,ultima:'hace 4 días',cxc:0,adelanto:100.00,puntos:95,tipo:'frecuente',nivel:'Bronce',estado:'Activo'},
+    {id:'c005',nombre:'Luis Vargas',tel:'0426-5678901',email:'luis@mail.com',visitas:6,gasto:175.50,ultima:'esta semana',cxc:28.50,adelanto:0,puntos:88,tipo:'credito',nivel:'Bronce',estado:'Activo'},
+    {id:'c006',nombre:'Sofía Castro',tel:'0414-6789012',email:'sofia@mail.com',visitas:3,gasto:85.00,ultima:'hace 2 sem.',cxc:0,adelanto:0,puntos:43,tipo:'frecuente',nivel:'Bronce',estado:'Activo'},
+    {id:'c007',nombre:'Pedro Fernández',tel:'0416-7890123',email:'pedro@mail.com',visitas:1,gasto:32.00,ultima:'hace 1 mes',cxc:0,adelanto:0,puntos:16,tipo:'frecuente',nivel:'Bronce',estado:'Activo'},
+  ],
+  cxc:[
+    {id:'cxc001',clienteId:'c001',cliente:'Rafael Torres',concepto:'Cena 14/03',fecha:'hace 5 días',vence:'en 10 días',monto:45.00,abonado:0,saldo:45.00,estado:'Pendiente'},
+    {id:'cxc002',clienteId:'c003',cliente:'José Martín',concepto:'Evento privado',fecha:'hace 12 días',vence:'vencida',monto:90.00,abonado:23.00,saldo:67.00,estado:'Vencida'},
+    {id:'cxc003',clienteId:'c005',cliente:'Luis Vargas',concepto:'Almuerzo 10/03',fecha:'hace 3 días',vence:'en 12 días',monto:28.50,abonado:0,saldo:28.50,estado:'Pendiente'},
+    {id:'cxc004',clienteId:'c002',cliente:'Carmen Díaz',concepto:'Cumpleaños',fecha:'hace 20 días',vence:'—',monto:120.00,abonado:120.00,saldo:0,estado:'Saldada'},
+  ],
+  abonos:[
+    {fecha:'ayer',cliente:'José Martín',cxc:'Evento privado',monto:23.00,forma:'Efectivo USD',saldo:67.00,por:'Carlos M.'},
+    {fecha:'hace 5 días',cliente:'Carmen Díaz',cxc:'Cumpleaños',monto:60.00,forma:'Zelle',saldo:60.00,por:'Admin'},
+    {fecha:'hace 8 días',cliente:'Carmen Díaz',cxc:'Cumpleaños',monto:60.00,forma:'Pago Móvil',saldo:0,por:'Admin'},
+  ],
+  adelantos:[
+    {id:'a001',clienteId:'c002',cliente:'Carmen Díaz',fecha:'hace 7 días',original:50.00,usado:0,saldo:50.00,ultimo:'—',estado:'Vigente'},
+    {id:'a002',clienteId:'c004',cliente:'Ana Rodríguez',fecha:'hace 3 días',original:100.00,usado:0,saldo:100.00,ultimo:'—',estado:'Vigente'},
+    {id:'a003',clienteId:'c001',cliente:'Rafael Torres',fecha:'hace 1 mes',original:80.00,usado:80.00,saldo:0,ultimo:'hace 2 días',estado:'Agotado'},
+  ],
+  leads:[
+    {id:'l001',nombre:'María López',tel:'0414-9999001',fuente:'Instagram',interes:'Cenas corporativas',estado:'nuevo',fecha:'hoy',notas:'Preguntó por menú ejecutivo'},
+    {id:'l002',nombre:'Empresa XYZ',tel:'0412-8888002',fuente:'Referido',interes:'Eventos privados',estado:'contactado',fecha:'hace 2 días',notas:'Llamada programada el viernes'},
+    {id:'l003',nombre:'Roberto Silva',tel:'0416-7777003',fuente:'Google',interes:'Reservas fin de semana',estado:'interesado',fecha:'hace 4 días',notas:'Quiere visitar el local esta semana'},
+    {id:'l004',nombre:'Laura Pérez',tel:'0424-6666004',fuente:'WhatsApp',interes:'Cumpleaños',estado:'convertido',fecha:'hace 6 días',notas:'Reservó para el sábado — cliente c006'},
+    {id:'l005',nombre:'Carlos Ríos',tel:'0426-5555005',fuente:'Instagram',interes:'General',estado:'nuevo',fecha:'ayer',notas:''},
+  ],
+  canjes:[
+    {fecha:'hace 3 días',cliente:'Rafael Torres',puntos:50,beneficio:'10% descuento',por:'Ana G.'},
+    {fecha:'hace 8 días',cliente:'Carmen Díaz',puntos:30,beneficio:'Postre gratis',por:'Pedro L.'},
+  ],
+}
+
+// Estado activo
+let CRM_CLIENTES = JSON.parse(JSON.stringify(CLI_DATA.clientes));
+let CRM_CXC      = JSON.parse(JSON.stringify(CLI_DATA.cxc));
+let CRM_ABONOS   = JSON.parse(JSON.stringify(CLI_DATA.abonos));
+let CRM_ADELANTOS= JSON.parse(JSON.stringify(CLI_DATA.adelantos));
+let CRM_LEADS    = JSON.parse(JSON.stringify(CLI_DATA.leads));
+let CRM_CANJES   = JSON.parse(JSON.stringify(CLI_DATA.canjes));
+
+// Track de dónde vienen los datos
+let DATA_SOURCE = 'demo';   // 'demo' | 'idb' | 'supabase' | 'pos_sync'
+
+// ── OBJETO CRM — contiene TODA la lógica ─────────────────────────
+const CRM = {
+
+  openModal(id){ const e=document.getElementById(id);if(e)e.classList.add('open'); },
+  closeModal(id){ const e=document.getElementById(id);if(e)e.classList.remove('open'); },
+
+  // ── CARGAR DATOS desde IDB (si hay datos del POS/Admin compartidos) ──
+  async loadData(){
+    try {
+      // 1. Intentar cargar desde IDB compartida (Core Data Layer)
+      const idbClientes = await IDB.getAll('clientes');
+      if(idbClientes.length > 0){
+        CRM_CLIENTES = idbClientes;
+        DATA_SOURCE  = 'idb';
+      }
+
+      // 2. Intentar cargar desde Supabase si hay key
+      if(SupabaseService.key && navigator.onLine){
+        const r = await SupabaseService.select('clientes','order=nombre.asc');
+        if(r.ok && r.data.length > 0){
+          CRM_CLIENTES = r.data;
+          DATA_SOURCE  = 'supabase';
+          // Actualizar IDB con datos frescos
+          for(const c of r.data) await IDB.put('clientes', c);
+        }
+      }
+    } catch(e){ console.warn('[CRM] loadData:', e.message); }
+
+    this.updateDataSourceBadge();
+  },
+
+  updateDataSourceBadge(){
+    const el = document.getElementById('crm-data-source');
+    const labels = {
+      demo:     '📋 Datos de demostración',
+      idb:      '💾 IndexedDB local (POS)',
+      supabase: '☁ Supabase (nube)',
+      pos_sync: '🔄 Sincronizado del POS',
+    };
+    if(el) el.textContent = labels[DATA_SOURCE] || DATA_SOURCE;
+  },
+
+  // ── DIRECTORIO DE CLIENTES ──────────────────────────────────────
+  renderDirectorio(q=''){
+    const data  = CRM_CLIENTES.filter(c=>!q||c.nombre.toLowerCase().includes(q.toLowerCase())||c.tel?.includes(q));
+    const total = data.length;
+    const totalGasto = data.reduce((s,c)=>s+Number(c.gasto||0),0);
+    const totalCxC   = data.reduce((s,c)=>s+Number(c.cxc||0),0);
+    const html = `
+      <!-- BANNER DE INTEGRACIÓN si hay datos del POS -->
+      ${DATA_SOURCE!=='demo'?`<div class="integration-banner">🔗 Datos importados del módulo ${DATA_SOURCE==='idb'?'POS (local)':'Supabase'} — ${total} clientes disponibles desde el primer uso</div>`:''}
+
+      <!-- KPIs -->
+      <div class="kpi-row">
+        <div class="kpi"><div class="kpi-label">CLIENTES</div><div class="kpi-val">${total}</div></div>
+        <div class="kpi"><div class="kpi-label">GASTO TOTAL</div><div class="kpi-val" style="color:var(--green)">${Fmt.money(totalGasto)}</div></div>
+        <div class="kpi"><div class="kpi-label">CxC ACTIVA</div><div class="kpi-val" style="color:var(--amber)">${Fmt.money(totalCxC)}</div></div>
+        <div class="kpi"><div class="kpi-label">TICKET PROM.</div><div class="kpi-val">${Fmt.money(total?totalGasto/total:0)}</div></div>
+      </div>
+
+      <!-- TOOLBAR -->
+      <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">
+        <input class="finput" style="flex:1" placeholder="Buscar por nombre o teléfono..." oninput="CRM.renderDirectorio(this.value)" value="${q}">
+        <button class="btn btn-primary btn-sm" onclick="CRM.abrirModalCliente(null)">+ Nuevo</button>
+      </div>
+
+      <!-- TABLA -->
+      <div class="card">
+        <table class="rep-table">
+          <thead><tr>
+            <th>NOMBRE</th><th>TELÉFONO</th><th>VISITAS</th>
+            <th>GASTO</th><th>CxC</th><th>NIVEL</th><th></th>
+          </tr></thead>
+          <tbody>
+            ${data.map(c=>`<tr>
+              <td><strong style="color:var(--text)">${c.nombre}</strong></td>
+              <td style="font-family:var(--mono)">${c.tel||'—'}</td>
+              <td style="text-align:center">${c.visitas||0}</td>
+              <td style="color:var(--green);font-family:var(--mono)">${Fmt.money(c.gasto||0)}</td>
+              <td style="color:${c.cxc>0?'var(--amber)':'var(--text-dim)'};font-family:var(--mono)">${c.cxc>0?Fmt.money(c.cxc):'—'}</td>
+              <td><span class="badge ${c.nivel==='Oro'?'b-amber':c.nivel==='Plata'?'b-blue':c.nivel==='VIP'?'b-purple':'b-green'}">${c.nivel||'Bronce'}</span></td>
+              <td style="display:flex;gap:5px">
+                <button class="btn btn-ghost btn-sm" onclick="CRM.abrirModalCliente('${c.id}')">✏️</button>
+                <button class="btn btn-ghost btn-sm" onclick="CRM.verFichaCliente('${c.id}')">👁</button>
+              </td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+    DOM.setHtml('crm-content', `<div class="page-title">Directorio de clientes</div><div class="page-sub">${total} clientes registrados</div>${html}`);
+  },
+
+  verFichaCliente(id){
+    const c = CRM_CLIENTES.find(x=>x.id===id);
+    if(!c) return;
+    const cxcActivas = CRM_CXC.filter(x=>x.clienteId===id && x.saldo>0);
+    const adelantos  = CRM_ADELANTOS.filter(x=>x.clienteId===id && x.saldo>0);
+    const overlay = document.createElement('div');
+    overlay.style.cssText='position:fixed;inset:0;z-index:950;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center';
+    overlay.innerHTML=`
+      <div style="background:var(--surface);border:1px solid var(--border2);border-radius:14px;padding:22px;max-width:520px;width:90%;max-height:80vh;overflow-y:auto">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <div><div style="font-size:15px;font-weight:700;color:var(--text)">${c.nombre}</div>
+               <div style="font-size:10px;color:var(--text-dim);font-family:var(--mono)">${c.tel||''} ${c.email?'· '+c.email:''}</div></div>
+          <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;color:var(--text-dim);font-size:18px;cursor:pointer">✕</button>
+        </div>
+        <div class="kpi-row" style="margin-bottom:12px">
+          <div class="kpi"><div class="kpi-label">VISITAS</div><div class="kpi-val">${c.visitas||0}</div></div>
+          <div class="kpi"><div class="kpi-label">GASTO TOTAL</div><div class="kpi-val" style="color:var(--green)">${Fmt.money(c.gasto||0)}</div></div>
+          <div class="kpi"><div class="kpi-label">PUNTOS</div><div class="kpi-val" style="color:var(--amber)">${c.puntos||0}</div></div>
+        </div>
+        ${cxcActivas.length?`<div style="font-size:10px;font-family:var(--mono);color:var(--text-dim);letter-spacing:1px;margin-bottom:6px">CUENTAS POR COBRAR</div>
+          ${cxcActivas.map(x=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
+            <div><div style="font-size:11px;font-weight:600;color:var(--text)">${x.concepto}</div>
+                 <div style="font-size:10px;color:var(--text-dim);font-family:var(--mono)">Vence: ${x.vence}</div></div>
+            <div style="font-family:var(--mono);color:var(--amber);font-weight:700">${Fmt.money(x.saldo)}</div>
+          </div>`).join('')}`:''}
+        ${adelantos.length?`<div style="font-size:10px;font-family:var(--mono);color:var(--text-dim);letter-spacing:1px;margin:10px 0 6px">ADELANTOS DISPONIBLES</div>
+          ${adelantos.map(x=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
+            <div style="font-size:11px;color:var(--text)">Adelanto ${x.fecha}</div>
+            <div style="font-family:var(--mono);color:var(--green);font-weight:700">${Fmt.money(x.saldo)}</div>
+          </div>`).join('')}`:''}
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click',e=>{if(e.target===overlay)overlay.remove();});
+  },
+
+  abrirModalCliente(id){
+    const c = id ? CRM_CLIENTES.find(x=>x.id===id) : null;
+    DOM.setHtml('modal-cli-title', c?'Editar cliente':'Nuevo cliente');
+    DOM.setHtml('modal-cli-body', `
+      <div class="fgroup"><label class="flabel">NOMBRE *</label><input class="finput" id="cli-nombre" value="${c?.nombre||''}"></div>
+      <div class="fgroup"><label class="flabel">TELÉFONO</label><input class="finput" id="cli-tel" value="${c?.tel||''}"></div>
+      <div class="fgroup full"><label class="flabel">EMAIL</label><input class="finput" id="cli-email" value="${c?.email||''}"></div>
+      <div class="fgroup"><label class="flabel">TIPO</label>
+        <select class="fselect" id="cli-tipo">
+          <option ${c?.tipo==='regular'?'selected':''}>regular</option>
+          <option ${c?.tipo==='vip'?'selected':''}>vip</option>
+          <option ${c?.tipo==='corporativo'?'selected':''}>corporativo</option>
+        </select></div>
+      <input type="hidden" id="cli-edit-id" value="${c?.id||''}">
+    `);
+    this.openModal('modal-cliente');
+  },
+
+  async guardarCliente(){
+    const id    = document.getElementById('cli-edit-id')?.value;
+    const nombre = document.getElementById('cli-nombre')?.value.trim();
+    const tel    = document.getElementById('cli-tel')?.value.trim();
+    const email  = document.getElementById('cli-email')?.value.trim();
+    const tipo   = document.getElementById('cli-tipo')?.value;
+    if(!nombre){ DOM.flash('El nombre es obligatorio','var(--red)'); return; }
+    const obj = { id: id||Fmt.genId('cli'), nombre, tel, email, tipo, visitas:0, gasto:0, cxc:0, adelanto:0, puntos:0, nivel:'Bronce', estado:'activo', ultima: new Date().toISOString() };
+    if(id){ CRM_CLIENTES = CRM_CLIENTES.map(c=>c.id===id?{...c,...obj}:c); }
+    else { CRM_CLIENTES.unshift(obj); }
+    // Guardar en IDB + encolar sync
+    await IDB.put('clientes', obj);
+    await SyncService.enqueue('crm','clientes','upsert', obj);
+    // Emitir evento al bus
+    EventBus.emit('cliente.actualizado', { cliente:obj, op: id?'update':'create' }, true);
+    this.closeModal('modal-cliente');
+    this.renderDirectorio();
+    DOM.flash(`${id?'Cliente actualizado':'Cliente creado'}: ${nombre}`,'var(--green)');
+  },
+
+  // ── CUENTAS POR COBRAR ──────────────────────────────────────────
+  renderCxC(){
+    const activas    = CRM_CXC.filter(c=>c.saldo>0);
+    const totalSaldo = activas.reduce((s,c)=>s+Number(c.saldo||0),0);
+    const vencidas   = activas.filter(c=>new Date(c.vence)<new Date());
+    const html = `
+      <div class="kpi-row">
+        <div class="kpi"><div class="kpi-label">CxC ACTIVAS</div><div class="kpi-val">${activas.length}</div></div>
+        <div class="kpi"><div class="kpi-label">SALDO TOTAL</div><div class="kpi-val" style="color:var(--amber)">${Fmt.money(totalSaldo)}</div></div>
+        <div class="kpi"><div class="kpi-label">VENCIDAS</div><div class="kpi-val" style="color:var(--red)">${vencidas.length}</div></div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+        <button class="btn btn-primary btn-sm" onclick="CRM.abrirModalCxC(null)">+ Nueva CxC</button>
+      </div>
+      <div class="card">
+        <table class="rep-table">
+          <thead><tr><th>CLIENTE</th><th>CONCEPTO</th><th>TOTAL</th><th>SALDO</th><th>VENCE</th><th>ESTADO</th><th></th></tr></thead>
+          <tbody>
+            ${activas.map(c=>{
+              const cli = CRM_CLIENTES.find(x=>x.id===c.clienteId);
+              const vencida = new Date(c.vence)<new Date();
+              return `<tr>
+                <td style="font-weight:600;color:var(--text)">${cli?.nombre||c.cliente||'—'}</td>
+                <td>${c.concepto}</td>
+                <td style="font-family:var(--mono)">${Fmt.money(c.total)}</td>
+                <td style="font-family:var(--mono);color:var(--amber);font-weight:700">${Fmt.money(c.saldo)}</td>
+                <td style="font-family:var(--mono);font-size:10px;color:${vencida?'var(--red)':'var(--text-dim)'}">${c.vence}</td>
+                <td><span class="badge ${vencida?'b-red':'b-amber'}">${vencida?'vencida':'activa'}</span></td>
+                <td><button class="btn btn-ghost btn-sm" onclick="CRM.abrirAbonar('${c.id}')">Abonar</button></td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>`;
+    DOM.setHtml('crm-content', `<div class="page-title">Cuentas por Cobrar</div><div class="page-sub">${activas.length} activas · ${vencidas.length} vencidas</div>${html}`);
+  },
+
+  abrirModalCxC(id){
+    DOM.setHtml('modal-cxc-body', `
+      <div class="fgroup"><label class="flabel">CLIENTE *</label>
+        <select class="fselect" id="cxc-cliente">
+          <option value="">— Seleccionar —</option>
+          ${CRM_CLIENTES.map(c=>`<option value="${c.id}">${c.nombre}</option>`).join('')}
+        </select></div>
+      <div class="fgroup"><label class="flabel">MONTO $</label><input class="finput" id="cxc-monto" type="number" placeholder="0.00"></div>
+      <div class="fgroup full"><label class="flabel">CONCEPTO</label><input class="finput" id="cxc-concepto" placeholder="Descripción..."></div>
+      <div class="fgroup"><label class="flabel">DÍAS PARA VENCER</label><input class="finput" id="cxc-dias" type="number" value="30"></div>
+    `);
+    this.openModal('modal-cxc');
+  },
+
+  async guardarCxC(){
+    const clienteId = document.getElementById('cxc-cliente')?.value;
+    const monto     = parseFloat(document.getElementById('cxc-monto')?.value||0);
+    const concepto  = document.getElementById('cxc-concepto')?.value.trim();
+    const dias      = parseInt(document.getElementById('cxc-dias')?.value||30);
+    if(!clienteId||!monto||!concepto){ DOM.flash('Completa todos los campos','var(--red)'); return; }
+    const vence = new Date(); vence.setDate(vence.getDate()+dias);
+    const cli   = CRM_CLIENTES.find(c=>c.id===clienteId);
+    const obj   = { id:Fmt.genId('cxc'), clienteId, cliente:cli?.nombre||'', concepto, total:monto, pagado:0, saldo:monto, estado:'activa', fecha:new Date().toISOString().slice(0,10), vence:vence.toISOString().slice(0,10) };
+    CRM_CXC.unshift(obj);
+    await SyncService.enqueue('crm','cuentas_por_cobrar','upsert',obj);
+    EventBus.emit('cxc.creada',{cxc:obj},true);
+    this.closeModal('modal-cxc');
+    this.renderCxC();
+    DOM.flash(`CxC creada: ${cli?.nombre} · ${Fmt.money(monto)}`,'var(--green)');
+  },
+
+  abrirAbonar(cxcId){
+    const cxc = CRM_CXC.find(c=>c.id===cxcId);
+    if(!cxc) return;
+    const overlay = document.createElement('div');
+    overlay.style.cssText='position:fixed;inset:0;z-index:950;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center';
+    overlay.innerHTML=`
+      <div style="background:var(--surface);border:1px solid var(--border2);border-radius:14px;padding:22px;max-width:380px;width:90%">
+        <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:14px">Registrar abono</div>
+        <div style="font-size:12px;color:var(--text-mid);margin-bottom:14px">${cxc.concepto} · Saldo: <strong style="color:var(--amber)">${Fmt.money(cxc.saldo)}</strong></div>
+        <input class="finput" id="abono-monto" type="number" placeholder="Monto a abonar" value="${cxc.saldo}" style="margin-bottom:10px;width:100%">
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+          <button class="btn btn-ghost" onclick="this.closest('[style*=fixed]').remove()">Cancelar</button>
+          <button class="btn btn-primary" onclick="CRM.confirmarAbono('${cxcId}')">✅ Confirmar</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+  },
+
+  async confirmarAbono(cxcId){
+    const monto = parseFloat(document.getElementById('abono-monto')?.value||0);
+    if(!monto) return;
+    CRM_CXC = CRM_CXC.map(c=>{
+      if(c.id!==cxcId) return c;
+      const pagado = Number(c.pagado)+monto;
+      const saldo  = Math.max(0,Number(c.saldo)-monto);
+      return {...c, pagado, saldo, estado: saldo<=0?'pagada':'activa'};
+    });
+    const updated = CRM_CXC.find(c=>c.id===cxcId);
+    await SyncService.enqueue('crm','cuentas_por_cobrar','upsert',updated);
+    document.querySelector('[style*="fixed"]')?.remove();
+    this.renderCxC();
+    DOM.flash(`Abono registrado: ${Fmt.money(monto)}`,'var(--green)');
+  },
+
+  // ── LEADS KANBAN ────────────────────────────────────────────────
+  renderLeads(){
+    const estados = ['nuevo','contactado','interesado','convertido'];
+    const labels  = {nuevo:'Nuevo',contactado:'Contactado',interesado:'Interesado',convertido:'Convertido'};
+    const cols    = estados.map(est=>{
+      const cards = CRM_LEADS.filter(l=>l.estado===est);
+      return `<div class="kanban-col">
+        <div class="kanban-hdr"><span>${labels[est]}</span><span style="background:var(--surface3);padding:1px 6px;border-radius:8px;font-size:10px">${cards.length}</span></div>
+        <button class="btn btn-ghost btn-sm" onclick="CRM.abrirModalLead(null,'${est}')" style="width:100%;margin-bottom:8px">+ Lead</button>
+        ${cards.map(l=>`<div class="lead-card" onclick="CRM.abrirModalLead('${l.id}')">
+          <div style="font-size:11px;font-weight:600;color:var(--text);margin-bottom:3px">${l.nombre}</div>
+          <div style="font-size:10px;color:var(--text-dim)">${l.tel||''} ${l.fuente?'· '+l.fuente:''}</div>
+          ${l.interes?`<div style="font-size:10px;color:var(--blue);margin-top:4px">${l.interes}</div>`:''}
+        </div>`).join('')}
+      </div>`;
+    }).join('');
+    DOM.setHtml('crm-content', `
+      <div class="page-title">Pipeline de Leads</div>
+      <div class="page-sub">${CRM_LEADS.length} leads totales · ${CRM_LEADS.filter(l=>l.estado==='convertido').length} convertidos</div>
+      <div class="kanban">${cols}</div>
+    `);
+  },
+
+  abrirModalLead(id, estadoDefault='nuevo'){
+    const l = id ? CRM_LEADS.find(x=>x.id===id) : null;
+    DOM.setHtml('modal-lead-title', l?'Editar lead':'Nuevo lead');
+    DOM.setHtml('modal-lead-body',`
+      <div class="fgroup"><label class="flabel">NOMBRE *</label><input class="finput" id="lead-nombre" value="${l?.nombre||''}"></div>
+      <div class="fgroup"><label class="flabel">TELÉFONO</label><input class="finput" id="lead-tel" value="${l?.tel||''}"></div>
+      <div class="fgroup"><label class="flabel">FUENTE</label>
+        <select class="fselect" id="lead-fuente">
+          ${['Instagram','WhatsApp','Referido','Web','Presencial','Otro'].map(f=>`<option ${l?.fuente===f?'selected':''}>${f}</option>`).join('')}
+        </select></div>
+      <div class="fgroup"><label class="flabel">ESTADO</label>
+        <select class="fselect" id="lead-estado">
+          ${['nuevo','contactado','interesado','convertido'].map(e=>`<option value="${e}" ${(l?.estado||estadoDefault)===e?'selected':''}>${e}</option>`).join('')}
+        </select></div>
+      <div class="fgroup full"><label class="flabel">INTERÉS / NOTAS</label><input class="finput" id="lead-interes" value="${l?.interes||''}"></div>
+      <input type="hidden" id="lead-edit-id" value="${l?.id||''}">
+    `);
+    this.openModal('modal-lead');
+  },
+
+  async guardarLead(){
+    const id      = document.getElementById('lead-edit-id')?.value;
+    const nombre  = document.getElementById('lead-nombre')?.value.trim();
+    const tel     = document.getElementById('lead-tel')?.value.trim();
+    const fuente  = document.getElementById('lead-fuente')?.value;
+    const estado  = document.getElementById('lead-estado')?.value;
+    const interes = document.getElementById('lead-interes')?.value.trim();
+    if(!nombre){ DOM.flash('Nombre obligatorio','var(--red)'); return; }
+    const obj = { id:id||Fmt.genId('lead'), nombre, tel, fuente, estado, interes, fecha:new Date().toISOString().slice(0,10) };
+    if(id) CRM_LEADS = CRM_LEADS.map(l=>l.id===id?{...l,...obj}:l);
+    else   CRM_LEADS.unshift(obj);
+    await SyncService.enqueue('crm','crm_leads','upsert',obj);
+    EventBus.emit('lead.actualizado',{lead:obj},true);
+    // Si se convirtió → crear cliente automáticamente
+    if(estado==='convertido'){
+      const existe = CRM_CLIENTES.find(c=>c.nombre===nombre||c.tel===tel);
+      if(!existe){
+        const cliNuevo = { id:Fmt.genId('cli'), nombre, tel, tipo:'regular', visitas:0, gasto:0, cxc:0, adelanto:0, puntos:0, nivel:'Bronce', estado:'activo', ultima:new Date().toISOString() };
+        CRM_CLIENTES.unshift(cliNuevo);
+        await IDB.put('clientes', cliNuevo);
+        await SyncService.enqueue('crm','clientes','upsert',cliNuevo);
+        DOM.flash(`Lead convertido → cliente creado: ${nombre}`,'var(--green)');
+      }
+    }
+    this.closeModal('modal-lead');
+    this.renderLeads();
+  },
+
+  // ── FIDELIZACIÓN ─────────────────────────────────────────────────
+  renderFidelizacion(){
+    const niveles = [
+      { nom:'Bronce', min:0,    max:499,  ico:'🥉', color:'var(--text-dim)' },
+      { nom:'Plata',  min:500,  max:999,  ico:'🥈', color:'var(--blue)'    },
+      { nom:'Oro',    min:1000, max:2499, ico:'🏅', color:'var(--amber)'   },
+      { nom:'VIP',    min:2500, max:Infinity, ico:'💎', color:'var(--purple)'  },
+    ];
+    const totalPuntos = CRM_CLIENTES.reduce((s,c)=>s+(c.puntos||0),0);
+    const html=`
+      <div class="kpi-row">
+        <div class="kpi"><div class="kpi-label">TOTAL PUNTOS</div><div class="kpi-val">${totalPuntos.toLocaleString()}</div></div>
+        <div class="kpi"><div class="kpi-label">CANJES</div><div class="kpi-val">${CRM_CANJES.length}</div></div>
+      </div>
+      <div class="card">
+        ${niveles.map(n=>{
+          const miembros = CRM_CLIENTES.filter(c=>(c.puntos||0)>=n.min && (c.puntos||0)<=n.max);
+          return `<div class="nivel-card">
+            <div class="nivel-ico">${n.ico}</div>
+            <div style="flex:1"><div style="font-size:12px;font-weight:600;color:${n.color}">${n.nom}</div>
+              <div style="font-size:10px;color:var(--text-dim)">${n.min} – ${n.max===Infinity?'∞':n.max} puntos · <strong>${miembros.length} clientes</strong></div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`;
+    DOM.setHtml('crm-content',`<div class="page-title">Programa de Fidelización</div><div class="page-sub">Niveles basados en puntos acumulados</div>${html}`);
+  },
+
+  // ── PANEL DE INTEGRACIÓN ────────────────────────────────────────
+  renderIntegracion(){
+    const html=`
+      <div class="card">
+        <div class="card-head"><div class="card-title">🔗 Conexión con otros módulos</div></div>
+        <div style="padding:14px;display:flex;flex-direction:column;gap:10px">
+          <div style="background:var(--surface2);border-radius:8px;padding:12px">
+            <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:4px">POS Restaurante</div>
+            <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Cuando se cierra una venta en el POS, el CRM suma automáticamente la visita y el gasto al cliente.</div>
+            <span class="badge ${DATA_SOURCE!=='demo'?'b-green':'b-amber'}">${DATA_SOURCE!=='demo'?'✅ Conectado':'⚠ Sin datos del POS'}</span>
+          </div>
+          <div style="background:var(--surface2);border-radius:8px;padding:12px">
+            <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:4px">Admin ERP</div>
+            <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Los clientes creados aquí aparecen en el módulo de clientes del Admin y viceversa.</div>
+            <span class="badge b-green">✅ Comparte Core Data Layer</span>
+          </div>
+          <div style="background:var(--surface2);border-radius:8px;padding:12px">
+            <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:4px">FinTrack</div>
+            <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Las CxC activas alimentan el dashboard de cuentas por cobrar del FinTrack.</div>
+            <span class="badge b-blue">ℹ Disponible en plan Enterprise</span>
+          </div>
+          <div style="background:var(--surface2);border-radius:8px;padding:12px">
+            <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:4px">Modo standalone</div>
+            <div style="font-size:11px;color:var(--text-dim)">El CRM funciona completamente solo. Si no hay otros módulos, gestiona tus clientes de forma independiente. Los datos se guardan en IndexedDB y Supabase.</div>
+          </div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:12px">
+        <div class="card-head"><div class="card-title">⚙ Configurar Supabase</div></div>
+        <div style="padding:14px">
+          <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">Para habilitar sync en la nube ingresa tu API key de Supabase:</div>
+          <input class="finput" id="sb-key-input" placeholder="eyJhbGci..." value="${Core.StateService.getStr('sb_key')||''}">
+          <div style="margin-top:8px;display:flex;gap:8px">
+            <button class="btn btn-primary btn-sm" onclick="Core.StateService.setStr('sb_key',document.getElementById('sb-key-input').value);DOM.flash('API key guardada','var(--green)')">Guardar</button>
+            <button class="btn btn-ghost btn-sm" onclick="Core.SyncService.flush();DOM.flash('Sync iniciado...','var(--amber)')">Sync ahora</button>
+          </div>
+        </div>
+      </div>`;
+    DOM.setHtml('crm-content',`<div class="page-title">Integración de módulos</div><div class="page-sub">Cómo el CRM se conecta con el ecosistema ZytekOS</div>${html}`);
+  },
+};
+
+// ── NAVEGACIÓN ────────────────────────────────────────────────────
+function crmNav(el, view){
+  document.querySelectorAll('.sb-item').forEach(x=>x.classList.remove('active'));
+  el.classList.add('active');
+  switch(view){
+    case 'directorio':    CRM.renderDirectorio();    break;
+    case 'cxc':           CRM.renderCxC();           break;
+    case 'leads':         CRM.renderLeads();         break;
+    case 'fidelizacion':  CRM.renderFidelizacion();  break;
+    case 'integracion':   CRM.renderIntegracion();   break;
+    default: DOM.setHtml('crm-content',`<div class="page-title">${view}</div><div style="padding:20px;color:var(--text-dim)">Próximamente</div>`);
+  }
+}
+
+// ── ESCUCHAR EVENTOS DEL BUS (de otros módulos) ───────────────────
+EventBus.on('venta.cerrada', async payload=>{
+  if(!payload?.clienteId) return;
+  const cli = CRM_CLIENTES.find(c=>c.id===payload.clienteId);
+  if(!cli) return;
+  cli.visitas = (cli.visitas||0)+1;
+  cli.gasto   = (cli.gasto||0)+(payload.total||0);
+  cli.ultima  = new Date().toISOString();
+  await IDB.put('clientes', cli);
+  DOM.flash(`CRM: visita registrada → ${cli.nombre}`,'var(--green)');
+});
+
+// Recibir eventos del shell (si corre en iframe)
+window.addEventListener('message', e=>{
+  if(!e.data?.zytek) return;
+  EventBus.emit(e.data.event, e.data.payload);
+  // Emitir hacia el shell
+  if(window.parent !== window)
+    window.parent.postMessage(e.data, '*');
+});
+
+// Emitir eventos hacia el shell
+const origEmit = EventBus.emit.bind(EventBus);
+EventBus.emit = function(event, payload, persist){
+  origEmit(event, payload, persist);
+  if(window.parent !== window)
+    window.parent.postMessage({ zytek:true, event, payload }, '*');
+};
+
+// ── NET STATUS ────────────────────────────────────────────────────
+function updateNet(){
+  const on = navigator.onLine;
+  const dot = document.getElementById('crm-net-dot');
+  const txt = document.getElementById('crm-net-txt');
+  if(dot){ dot.style.background=on?'var(--green)':'var(--red)'; dot.style.boxShadow=`0 0 5px ${on?'var(--green)':'var(--red)'}`; }
+  if(txt) txt.textContent = on?'online':'offline';
+  const badge = document.getElementById('crm-sync-badge');
+  if(badge){ badge.className='sync-badge '+(on?'sync-ok':'sync-offline'); badge.textContent=on?'● sincronizado':'● offline'; }
+}
+window.addEventListener('online', updateNet);
+window.addEventListener('offline', updateNet);
+updateNet();
+
+// ── REGISTRAR MÓDULO ─────────────────────────────────────────────
+ModuleRegistry.register('crm', {
+  name: 'CRM',
+  version: '2.0.0',
+  standalone: true,
+  api: {
+    getClientes: ()=> CRM_CLIENTES,
+    getCxC:      ()=> CRM_CXC,
+    addVisita:   (clienteId, monto) => EventBus.emit('venta.cerrada',{clienteId, total:monto})
+  }
+});
+
+// ── INIT ─────────────────────────────────────────────────────────
+async function initCRM(){
+  await CRM.loadData();
+  CRM.renderDirectorio();
+  if(FROM_SHELL){
+    const user = Core.AuthService.getSharedUser();
+    if(user) DOM.flash(`CRM listo · ${user.nombre}`,'var(--green)');
+  }
+}
+initCRM();
+})();
+</script>
+</body>
+</html>

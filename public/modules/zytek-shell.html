@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ZytekOS</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@700;900&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="zytek-core.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--font);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+/* ── TOPBAR ── */
+.topbar{height:52px;background:var(--topbar);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;padding:0 18px;flex-shrink:0;z-index:100}
+.brand{display:flex;align-items:center;gap:8px}
+.brand-ico{width:30px;height:30px;background:var(--orange);border-radius:7px;display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-weight:900;font-size:15px;color:#fff}
+.brand-name{font-family:var(--serif);font-weight:700;font-size:14px;color:var(--text)}
+.brand-ver{font-size:9px;font-family:var(--mono);color:var(--text-dim);letter-spacing:2px}
+.tb-sep{width:1px;height:20px;background:var(--border2);margin:0 4px}
+/* ── TABS ── */
+.tabs{display:flex;gap:2px;overflow-x:auto;flex:1}
+.tab{padding:6px 14px;border-radius:6px;font-size:11px;font-family:var(--mono);cursor:pointer;border:none;background:transparent;color:var(--text-dim);transition:all .15s;white-space:nowrap;display:flex;align-items:center;gap:6px;position:relative}
+.tab:hover{background:var(--surface2);color:var(--text-mid)}
+.tab.active{background:var(--orange-dim);color:var(--orange);border:1px solid var(--orange-b)}
+.tab .tab-close{width:14px;height:14px;border-radius:50%;background:transparent;border:none;color:var(--text-dim);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;margin-left:2px;padding:0}
+.tab .tab-close:hover{background:var(--red-dim);color:var(--red)}
+.tab-add{padding:6px 10px;border-radius:6px;font-size:14px;cursor:pointer;border:none;background:transparent;color:var(--text-dim);transition:all .15s}
+.tab-add:hover{background:var(--surface2);color:var(--text)}
+/* ── STATUS ── */
+.tb-status{display:flex;align-items:center;gap:8px;margin-left:auto;flex-shrink:0}
+.status-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.status-txt{font-size:10px;font-family:var(--mono);color:var(--text-dim)}
+.badge{font-size:9px;font-family:var(--mono);padding:2px 7px;border-radius:10px;border:1px solid}
+.b-orange{background:var(--orange-dim);color:var(--orange);border-color:var(--orange-b)}
+.b-green{background:var(--green-dim);color:var(--green);border-color:var(--green-b)}
+/* ── FRAME AREA ── */
+.frame-area{flex:1;overflow:hidden;position:relative}
+.module-frame{position:absolute;inset:0;border:none;width:100%;height:100%;display:none}
+.module-frame.active{display:block}
+/* ── LAUNCHER ── */
+.launcher{position:absolute;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:30px;padding:40px}
+.launcher-title{font-family:var(--serif);font-size:28px;font-weight:700;color:var(--text);text-align:center}
+.launcher-sub{font-size:12px;color:var(--text-dim);font-family:var(--mono);text-align:center;margin-top:-20px}
+.modules-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;width:100%;max-width:780px}
+.mod-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px;cursor:pointer;transition:all .15s;display:flex;flex-direction:column;gap:8px}
+.mod-card:hover{border-color:var(--orange-b);background:var(--surface2)}
+.mod-ico{font-size:28px;line-height:1}
+.mod-name{font-size:13px;font-weight:600;color:var(--text)}
+.mod-desc{font-size:10px;color:var(--text-dim);font-family:var(--mono);line-height:1.5}
+.mod-status{display:flex;align-items:center;gap:5px;margin-top:4px}
+.mod-dot{width:5px;height:5px;border-radius:50%}
+.mod-plan{font-size:9px;font-family:var(--mono);padding:1px 6px;border-radius:8px;border:1px solid}
+.p-basic{background:rgba(255,255,255,.04);color:var(--text-dim);border-color:var(--border2)}
+.p-pro{background:var(--green-dim);color:var(--green);border-color:var(--green-b)}
+.p-ent{background:var(--purple-dim);color:var(--purple);border-color:var(--purple-b)}
+/* ── TENANT SELECTOR ── */
+.tenant-bar{background:var(--surface);border-bottom:1px solid var(--border);padding:6px 18px;display:flex;align-items:center;gap:10px;font-size:10px;font-family:var(--mono);color:var(--text-dim);flex-shrink:0}
+.tenant-name{color:var(--orange);font-weight:600}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar" data-topbar>
+  <div class="brand">
+    <div class="brand-ico">Z</div>
+    <div><div class="brand-name">ZytekOS</div><div class="brand-ver">v2.0 · SHELL</div></div>
+  </div>
+  <div class="tb-sep"></div>
+  <!-- Tabs de módulos abiertos -->
+  <div class="tabs" id="tabs"></div>
+  <button class="tab-add" onclick="showLauncher()" title="Abrir módulo">+</button>
+  <!-- Status bar -->
+  <div class="tb-status">
+    <div class="status-dot" id="net-dot" style="background:var(--amber)"></div>
+    <span class="status-txt" id="net-txt">verificando</span>
+    <span class="badge b-orange" id="tenant-badge">—</span>
+  </div>
+</div>
+
+<!-- TENANT BAR -->
+<div class="tenant-bar" id="tenant-bar" style="display:none">
+  Tenant: <span class="tenant-name" id="tb-tenant-name">—</span>
+  &nbsp;·&nbsp; Plan: <span id="tb-plan">—</span>
+  &nbsp;·&nbsp; Usuario: <span id="tb-user">—</span>
+  &nbsp;·&nbsp; <a href="#" onclick="ZytekShell.logout()" style="color:var(--red);text-decoration:none">Cerrar sesión</a>
+</div>
+
+<!-- FRAME AREA -->
+<div class="frame-area" id="frame-area">
+
+  <!-- LAUNCHER -->
+  <div id="launcher" class="launcher">
+    <div class="launcher-title">Bienvenido a ZytekOS</div>
+    <div class="launcher-sub">Selecciona el módulo que deseas abrir</div>
+    <div class="modules-grid" id="modules-grid"></div>
+  </div>
+
+  <!-- Los iframes de módulos se inyectan aquí dinámicamente -->
+
+</div>
+
+<script>
+'use strict';
+(async () => { // async wrapper for await ZytekCore.init
+// ── Inicializar el core en el shell ──────────────────────────────
+const Core = await ZytekCore.init('shell', { skipLicense: true });
+// Shell gestiona licencias por módulo — no necesita su propia validación
+const { DOM, Fmt, StateService, EventBus, ModuleRegistry } = Core;
+
+// ── CATÁLOGO DE MÓDULOS DISPONIBLES ──────────────────────────────
+const MODULES_CATALOG = [
+  { id:'pos',       name:'POS Restaurante', ico:'🍽️', desc:'Punto de venta · mesas · cobro · cortes', file:'zytek-module-pos.html',   plan:'basic', color:'var(--green)' },
+  { id:'admin',     name:'Admin ERP',       ico:'⚙️', desc:'ERP completo · 8 módulos · 48 reportes', file:'zytek-module-admin.html', plan:'pro',   color:'var(--orange)' },
+  { id:'mesero',    name:'POS Mesero',      ico:'👨‍🍳', desc:'App móvil para meseros · touch-first',   file:'zytek-pos-mesero.html',   plan:'basic', color:'var(--cyan)' },
+  { id:'kds',       name:'KDS Cocina',      ico:'📺', desc:'Pantalla de cocina · estaciones · timers', file:'zytek-kds.html',          plan:'basic', color:'var(--amber)' },
+  { id:'crm',       name:'CRM',            ico:'👥', desc:'Clientes · CxC · leads · fidelización',  file:'zytek-module-crm.html',   plan:'pro',   color:'var(--purple)' },
+  { id:'retail',    name:'POS Retail',      ico:'🛒', desc:'POS para tiendas · SKU · inventario',    file:'zytek-pos-retail.html',   plan:'pro',   color:'var(--blue)' },
+  { id:'fintrack',  name:'FinTrack',        ico:'📊', desc:'P&L · flujo de caja · gastos · ingresos', file:'zytek-module-fintrack.html', plan:'ent', color:'var(--green)' },
+  { id:'constructor',name:'Constructor IA', ico:'🤖', desc:'Multi-agente SOLID · genera módulos',    file:'zytek-agente-constructor.html', plan:'ent', color:'var(--cyan)' },
+];
+
+const PLAN_LABELS = { basic:'Básico', pro:'Profesional', ent:'Enterprise' };
+const PLAN_CLS    = { basic:'p-basic', pro:'p-pro', ent:'p-ent' };
+
+// ── ESTADO DEL SHELL ─────────────────────────────────────────────
+const ShellState = {
+  openModules: [],   // [{ id, frameId, tabId, name, ico }]
+  activeId:    null,
+  tenant:      StateService.getShared('tenant') || { nombre:'Demo', plan:'pro' },
+};
+
+// ── RENDER LAUNCHER ───────────────────────────────────────────────
+function renderLauncher(){
+  const grid = document.getElementById('modules-grid');
+  if(!grid) return;
+  // Plan del tenant determina qué módulos están disponibles
+  const planOrder = { basic:0, pro:1, ent:2 };
+  const tenantPlan = planOrder[ShellState.tenant.plan] ?? 1;
+  grid.innerHTML = MODULES_CATALOG.map(m=>{
+    const locked = planOrder[m.plan] > tenantPlan;
+    const op = locked ? '0.45' : '1';
+    return `<div class="mod-card" onclick="${locked?`DOM.flash('Este módulo requiere plan ${PLAN_LABELS[m.plan]}','var(--amber)')`:`openModule('${m.id}')`}"
+      style="opacity:${op}${locked?';cursor:not-allowed':''}">
+      <div class="mod-ico">${m.ico}</div>
+      <div class="mod-name">${m.name}</div>
+      <div class="mod-desc">${m.desc}</div>
+      <div class="mod-status">
+        <div class="mod-dot" style="background:${m.color}"></div>
+        <span class="mod-plan ${PLAN_CLS[m.plan]}">${PLAN_LABELS[m.plan]}</span>
+        ${locked?'<span style="font-size:9px;color:var(--text-dim);margin-left:4px">🔒</span>':''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── ABRIR MÓDULO ──────────────────────────────────────────────────
+function openModule(id){
+  // Si ya está abierto, solo activarlo
+  const existing = ShellState.openModules.find(m=>m.id===id);
+  if(existing){ activateModule(id); return; }
+
+  const meta = MODULES_CATALOG.find(m=>m.id===id);
+  if(!meta){ DOM.flash('Módulo no encontrado','var(--red)'); return; }
+
+  // Esconder launcher
+  document.getElementById('launcher').style.display='none';
+
+  // Crear iframe
+  const frame = document.createElement('iframe');
+  frame.id       = 'frame-'+id;
+  frame.className = 'module-frame';
+  frame.src       = meta.file;
+  frame.allow     = 'clipboard-read; clipboard-write';
+  // Pasar contexto al módulo via URL params
+  const ctx = {
+    tenant:   ShellState.tenant.nombre,
+    plan:     ShellState.tenant.plan,
+    user:     StateService.getShared('current_user')?.nombre || '',
+    fromShell:'1'
+  };
+  frame.src = meta.file + '?' + new URLSearchParams(ctx).toString();
+  document.getElementById('frame-area').appendChild(frame);
+
+  ShellState.openModules.push({ id, frameId:frame.id, name:meta.name, ico:meta.ico });
+  activateModule(id);
+  renderTabs();
+  DOM.flash(`${meta.ico} ${meta.name} abierto`,'var(--green)');
+}
+
+// ── ACTIVAR MÓDULO ────────────────────────────────────────────────
+function activateModule(id){
+  // Esconder todos los frames + launcher
+  document.querySelectorAll('.module-frame').forEach(f=>f.classList.remove('active'));
+  document.getElementById('launcher').style.display='none';
+  // Mostrar el frame del módulo
+  const frame = document.getElementById('frame-'+id);
+  if(frame) frame.classList.add('active');
+  ShellState.activeId = id;
+  renderTabs();
+}
+
+// ── CERRAR MÓDULO ─────────────────────────────────────────────────
+function closeModule(id){
+  const frame = document.getElementById('frame-'+id);
+  if(frame) frame.remove();
+  ShellState.openModules = ShellState.openModules.filter(m=>m.id!==id);
+  if(ShellState.activeId===id){
+    if(ShellState.openModules.length){
+      activateModule(ShellState.openModules[ShellState.openModules.length-1].id);
+    } else {
+      showLauncher();
+    }
+  }
+  renderTabs();
+}
+
+// ── MOSTRAR LAUNCHER ──────────────────────────────────────────────
+function showLauncher(){
+  document.querySelectorAll('.module-frame').forEach(f=>f.classList.remove('active'));
+  document.getElementById('launcher').style.display='flex';
+  ShellState.activeId = null;
+  renderTabs();
+}
+
+// ── RENDER TABS ───────────────────────────────────────────────────
+function renderTabs(){
+  const tabs = document.getElementById('tabs');
+  if(!tabs) return;
+  tabs.innerHTML = ShellState.openModules.map(m=>`
+    <div class="tab ${m.id===ShellState.activeId?'active':''}" onclick="activateModule('${m.id}')">
+      <span>${m.ico}</span>
+      <span>${m.name}</span>
+      <button class="tab-close" onclick="event.stopPropagation();closeModule('${m.id}')" title="Cerrar">×</button>
+    </div>`).join('');
+}
+
+// ── RED STATUS ────────────────────────────────────────────────────
+function updateNetStatus(){
+  const dot = document.getElementById('net-dot');
+  const txt = document.getElementById('net-txt');
+  const on  = navigator.onLine;
+  if(dot){ dot.style.background = on?'var(--green)':'var(--red)'; dot.style.boxShadow=`0 0 6px ${on?'var(--green)':'var(--red)'}`; }
+  if(txt) txt.textContent = on ? 'online' : 'offline';
+}
+window.addEventListener('online',  updateNetStatus);
+window.addEventListener('offline', updateNetStatus);
+updateNetStatus();
+
+// ── TENANT INFO ───────────────────────────────────────────────────
+function updateTenantBar(){
+  const user = Core.AuthService.getSharedUser();
+  const t    = ShellState.tenant;
+  DOM.setHtml('tb-tenant-name', t.nombre||'—');
+  DOM.setHtml('tb-plan',  PLAN_LABELS[t.plan]||t.plan||'—');
+  DOM.setHtml('tb-user',  user?.nombre||'—');
+  const badge = document.getElementById('tenant-badge');
+  if(badge) badge.textContent = t.nombre || '—';
+  if(user || t.nombre) DOM.setDisp('tenant-bar','flex');
+}
+
+// ── CROSS-MODULE EVENTS ───────────────────────────────────────────
+// Escuchar eventos de módulos hijos via postMessage
+window.addEventListener('message', e=>{
+  if(!e.data?.zytek) return;
+  const { event, payload } = e.data;
+  EventBus.emit(event, payload);
+
+  // Reenviar a otros módulos abiertos
+  document.querySelectorAll('.module-frame').forEach(frame=>{
+    if(frame.contentWindow !== e.source){
+      frame.contentWindow.postMessage({ zytek:true, event, payload }, '*');
+    }
+  });
+});
+
+// Eventos que el shell reacciona a
+EventBus.on('venta.cerrada', p=>{
+  console.info('[Shell] Venta cerrada:', p);
+  // Notificar a todos los módulos
+  broadcastToModules('venta.cerrada', p);
+});
+EventBus.on('cliente.actualizado', p=>broadcastToModules('cliente.actualizado', p));
+EventBus.on('stock.actualizado',   p=>broadcastToModules('stock.actualizado', p));
+EventBus.on('corte_z.completado',  p=>broadcastToModules('corte_z.completado', p));
+
+function broadcastToModules(event, payload){
+  document.querySelectorAll('.module-frame').forEach(frame=>{
+    try { frame.contentWindow.postMessage({ zytek:true, event, payload }, '*'); } catch(_){}
+  });
+}
+
+// ── API PÚBLICA DEL SHELL ────────────────────────────────────────
+window.ZytekShell = {
+  openModule, closeModule, activateModule, showLauncher,
+  broadcast: broadcastToModules,
+  logout(){ Core.AuthService.logout(); DOM.flash('Sesión cerrada','var(--amber)'); }
+};
+
+// ── INIT ─────────────────────────────────────────────────────────
+updateTenantBar();
+renderLauncher();
+})(); // end async wrapper
+</script>
+</body>
+</html>

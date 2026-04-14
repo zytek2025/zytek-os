@@ -1,0 +1,29 @@
+version: '3.9'
+# Solo levanta la DB y Redis — el app corre con npm run dev (hot reload)
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: zytek-db-dev
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: zytek_local_password
+      POSTGRES_DB: zytek_os
+    volumes:
+      - zytek-db-dev:/var/lib/postgresql/data
+      - ../supabase/migrations:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: zytek-redis-dev
+    ports:
+      - "6379:6379"
+
+volumes:
+  zytek-db-dev:

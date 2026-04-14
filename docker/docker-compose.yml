@@ -1,0 +1,68 @@
+version: '3.9'
+
+services:
+  # ── ZytekOS App ──────────────────────────────────────────────
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: runner
+    container_name: zytek-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - LICENSE_SECRET_KEY=${LICENSE_SECRET_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - zytek-net
+
+  # ── Postgres (si no usas Supabase cloud) ─────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: zytek-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: zytek_local_password
+      POSTGRES_DB: zytek_os
+    volumes:
+      - zytek-db-data:/var/lib/postgresql/data
+      - ../supabase/migrations:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - zytek-net
+
+  # ── Redis (para cache de licencias y sesiones) ────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: zytek-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - zytek-redis-data:/data
+    networks:
+      - zytek-net
+
+volumes:
+  zytek-db-data:
+  zytek-redis-data:
+
+networks:
+  zytek-net:
+    driver: bridge

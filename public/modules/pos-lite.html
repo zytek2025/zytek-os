@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>ZytekOS — POS Lite</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="zytek-core.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;touch-action:manipulation}
+html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);overflow:hidden}
+[data-theme="light"]{--bg:#f4f4f8;--surface:#fff;--surface2:#f0f0f5;--topbar:#fff;--border:rgba(0,0,0,.1);--border2:rgba(0,0,0,.18);--text:#111118;--text-mid:#444455;--text-dim:#888899;}
+
+/* LICENSE WALL */
+#license-wall{position:fixed;inset:0;z-index:99999;background:var(--bg,#0a0d12);display:flex;align-items:center;justify-content:center;padding:16px}
+.lw-box{max-width:400px;width:100%;text-align:center}
+.lw-logo{width:52px;height:52px;background:var(--orange,#ff7c20);border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:24px;font-weight:900;color:#fff}
+.lw-title{font-size:22px;font-weight:700;margin-bottom:6px}
+.lw-sub{font-size:10px;font-family:'DM Mono',monospace;color:var(--text-dim);letter-spacing:2px;margin-bottom:20px}
+.lw-input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;color:var(--text);font-family:'DM Mono',monospace;font-size:14px;letter-spacing:2px;text-transform:uppercase;outline:none;margin-bottom:10px}
+.lw-input:focus{border-color:var(--orange)}
+.lw-err{font-size:10px;color:var(--red);margin-bottom:10px;min-height:14px;font-family:'DM Mono',monospace}
+.lw-btn{width:100%;padding:13px;background:var(--orange);border:none;border-radius:9px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:14px}
+.lw-btn:disabled{opacity:.6}
+.demo-keys{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:left}
+.dk-title{font-size:9px;font-family:'DM Mono',monospace;color:var(--text-dim);letter-spacing:2px;margin-bottom:8px}
+.dk-item{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);cursor:pointer;font-size:11px;font-family:'DM Mono',monospace}
+.dk-item:last-child{border:none}
+.dk-key{color:var(--orange)}
+.dk-plan{color:var(--text-dim);font-size:9px}
+
+/* APP LAYOUT */
+#pos-app{display:none;height:100vh;flex-direction:column}
+#pos-app.ready{display:flex}
+
+/* TOPBAR */
+.topbar{height:48px;background:var(--topbar);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 12px;gap:10px;flex-shrink:0}
+.brand{display:flex;align-items:center;gap:8px}
+.brand-z{font-size:20px}
+.brand-name{font-size:13px;font-weight:700}
+.dt-wrap{display:flex;flex-direction:column;align-items:flex-end}
+.dt-time{font-family:'DM Mono',monospace;font-size:13px;font-weight:700}
+.dt-date{font-family:'DM Mono',monospace;font-size:9px;color:var(--text-dim)}
+.topbar-actions{display:flex;gap:6px;margin-left:auto}
+.tb-btn{width:34px;height:34px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text-mid);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px}
+
+/* MAIN CONTENT */
+.pos-main{display:flex;flex:1;min-height:0;overflow:hidden}
+
+/* MENU GRID */
+.menu-panel{flex:1;display:flex;flex-direction:column;min-width:0}
+.menu-header{padding:8px 12px;border-bottom:1px solid var(--border);display:flex;gap:6px;overflow-x:auto;flex-shrink:0}
+.menu-cat-btn{padding:6px 14px;border-radius:20px;border:1px solid var(--border);background:transparent;font-size:11px;font-weight:600;color:var(--text-mid);cursor:pointer;white-space:nowrap;transition:all .13s}
+.menu-cat-btn:hover{border-color:var(--orange);color:var(--orange)}
+.menu-cat-btn.active{background:var(--orange);border-color:var(--orange);color:#fff}
+.menu-grid{padding:10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;overflow-y:auto;flex:1}
+.menu-item{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px;cursor:pointer;text-align:center;transition:all .1s;user-select:none}
+.menu-item:active{transform:scale(.95);background:var(--orange-dim);border-color:var(--orange)}
+.menu-item-img{width:64px;height:64px;border-radius:8px;background:var(--surface2);margin:0 auto 6px;display:flex;align-items:center;justify-content:center;font-size:32px;overflow:hidden}
+.menu-item-img img{width:100%;height:100%;object-fit:cover}
+.menu-item-name{font-size:11px;font-weight:600;color:var(--text);margin-bottom:4px;line-height:1.2;height:26px;overflow:hidden}
+.menu-item-price{font-size:12px;font-weight:700;color:var(--orange);font-family:'DM Mono',monospace}
+.menu-empty{padding:40px;text-align:center;color:var(--text-dim);font-size:13px}
+
+/* ORDER PANEL */
+.order-panel{width:280px;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+.order-header{padding:10px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.order-title{font-size:12px;font-weight:700}
+.order-count{font-size:10px;font-family:'DM Mono',monospace;color:var(--text-dim)}
+.order-items{flex:1;overflow-y:auto;padding:8px}
+.order-item{display:flex;align-items:center;gap:8px;padding:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;margin-bottom:6px}
+.order-item-info{flex:1;min-width:0}
+.order-item-name{font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.order-item-price{font-size:10px;color:var(--text-dim);font-family:'DM Mono',monospace}
+.order-item-qty{display:flex;align-items:center;gap:4px}
+.qty-btn{width:24px;height:24px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.qty-btn:active{background:var(--orange);border-color:var(--orange);color:#fff}
+.qty-num{font-size:12px;font-weight:700;min-width:20px;text-align:center}
+.order-empty{padding:20px;text-align:center;color:var(--text-dim);font-size:11px}
+
+/* ORDER FOOTER */
+.order-footer{padding:10px 12px;border-top:1px solid var(--border)}
+.order-total-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.order-total-label{font-size:11px;color:var(--text-dim)}
+.order-total-value{font-size:18px;font-weight:700;color:var(--text);font-family:'DM Mono',monospace}
+.payment-methods{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px}
+.pay-btn{padding:10px 8px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);font-size:11px;font-weight:600;cursor:pointer;text-align:center;transition:all .1s;color:var(--text-mid)}
+.pay-btn:active{background:var(--orange);border-color:var(--orange);color:#fff}
+.pay-btn.selected{background:var(--orange);border-color:var(--orange);color:#fff}
+.cobrar-btn{width:100%;padding:14px;background:var(--green);border:none;border-radius:10px;color:#000;font-size:15px;font-weight:700;cursor:pointer;transition:opacity .1s}
+.cobrar-btn:active{opacity:.85}
+.cobrar-btn:disabled{background:var(--surface2);color:var(--text-dim);cursor:not-allowed}
+
+/* SUCCESS OVERLAY */
+#success-overlay{position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;flex-direction:column;gap:16px}
+#success-overlay.show{display:flex}
+.success-check{font-size:64px;animation:popIn .3s ease}
+.success-title{font-size:24px;font-weight:700;color:var(--green)}
+.success-amount{font-size:36px;font-weight:700;font-family:'DM Mono',monospace;color:var(--text)}
+.success-method{font-size:12px;color:var(--text-dim)}
+.success-btn{padding:12px 32px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-weight:600;cursor:pointer}
+@keyframes popIn{from{transform:scale(0);opacity:0}to{transform:scale(1);opacity:1}}
+
+/* PRINT BUTTON */
+.print-btn{margin-top:8px;width:100%;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text-mid);font-size:11px;cursor:pointer}
+
+/* TOAST */
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);padding:10px 20px;border-radius:8px;font-weight:600;font-family:'DM Mono',monospace;font-size:12px;z-index:9999;opacity:0;transition:opacity .3s}
+.toast.show{opacity:1}
+.toast.error{background:var(--red);color:#fff}
+.toast.success{background:var(--green);color:#000}
+</style>
+</head>
+<body>
+
+<!-- LICENSE WALL -->
+<div id="license-wall">
+  <div class="lw-box">
+    <div class="lw-logo">Z</div>
+    <div class="lw-title">POS Lite</div>
+    <div class="lw-sub">ZYTEK OS · STREET FOOD</div>
+    <input type="text" class="lw-input" id="lw-key" placeholder="ZYTEK-XXXX-XXXX-XXXX" autocomplete="off">
+    <div class="lw-err" id="lw-err"></div>
+    <button class="lw-btn" id="lw-btn" onclick="activateLicense()">Activar / Activate</button>
+    <div class="demo-keys">
+      <div class="dk-title">CLAVES DE PRUEBA / DEMO KEYS</div>
+      <div class="dk-item" onclick="setKey('ZYTEK-DEMO-BASIC-2025')"><span class="dk-key">ZYTEK-DEMO-BASIC-2025</span><span class="dk-plan">BASIC</span></div>
+      <div class="dk-item" onclick="setKey('ZYTEK-DEMO-PRO-2025')"><span class="dk-key">ZYTEK-DEMO-PRO-2025</span><span class="dk-plan">PRO</span></div>
+      <div class="dk-item" onclick="setKey('ZYTEK-DEMO-ENT-2025')"><span class="dk-key">ZYTEK-DEMO-ENT-2025</span><span class="dk-plan">ENTERPRISE</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- POS APP -->
+<div id="pos-app">
+  <div class="topbar">
+    <div class="brand">
+      <span class="brand-z">🛒</span>
+      <span class="brand-name">POS Lite</span>
+    </div>
+    <div class="dt-wrap">
+      <div class="dt-time" id="pos-time">--:--</div>
+      <div class="dt-date" id="pos-date">--/--/----</div>
+    </div>
+    <div class="topbar-actions">
+      <button class="tb-btn" onclick="toggleTheme()" title="Tema">☀️</button>
+      <button class="tb-btn" onclick="location.reload()" title="Recargar">🔄</button>
+    </div>
+  </div>
+
+  <div class="pos-main">
+    <div class="menu-panel">
+      <div class="menu-header" id="menu-cats"></div>
+      <div class="menu-grid" id="menu-grid"></div>
+    </div>
+
+    <div class="order-panel">
+      <div class="order-header">
+        <span class="order-title">Orden / Order</span>
+        <span class="order-count" id="order-count">0 items</span>
+      </div>
+      <div class="order-items" id="order-items"></div>
+      <div class="order-footer">
+        <div class="order-total-row">
+          <span class="order-total-label">Total</span>
+          <span class="order-total-value" id="order-total">$0.00</span>
+        </div>
+        <div class="payment-methods">
+          <button class="pay-btn selected" data-method="efectivo" onclick="selectPay(this)">💵 Efectivo</button>
+          <button class="pay-btn" data-method="tarjeta" onclick="selectPay(this)">💳 Tarjeta</button>
+          <button class="pay-btn" data-method="zelle" onclick="selectPay(this)">📱 Zelle</button>
+          <button class="pay-btn" data-method="otro" onclick="selectPay(this)">📋 Otro</button>
+        </div>
+        <button class="cobrar-btn" id="cobrar-btn" onclick="procesarVenta()" disabled>COBRAR</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SUCCESS OVERLAY -->
+<div id="success-overlay">
+  <div class="success-check">✅</div>
+  <div class="success-title">Venta Procesada</div>
+  <div class="success-amount" id="success-amount">$0.00</div>
+  <div class="success-method" id="success-method">Efectivo</div>
+  <button class="success-btn" onclick="cerrarSuccess()">Nueva Venta / New Sale</button>
+  <button class="print-btn" id="print-btn" onclick="imprimirTicket()">🖨️ Imprimir Ticket</button>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+let zytek = null;
+let menuItems = [];
+let categories = [];
+let currentCat = 'all';
+let order = [];
+let selectedPay = 'efectivo';
+let currentLicense = null;
+let sbKey = '';
+
+// LICENSING
+const DEMO_KEYS = {
+  'ZYTEK-DEMO-BASIC-2025': { tenant:'Demo Basic', plan:'basic', expires:'2099-12-31' },
+  'ZYTEK-DEMO-PRO-2025': { tenant:'Demo Pro', plan:'pro', expires:'2099-12-31' },
+  'ZYTEK-DEMO-ENT-2025': { tenant:'Demo Ent', plan:'ent', expires:'2099-12-31' },
+  'ZYTEK-DANI-FULL-2025': { tenant:'Zytek LLC', plan:'ent', expires:'2099-12-31' },
+};
+
+function setKey(k){ document.getElementById('lw-key').value = k; }
+
+async function activateLicense(){
+  const key = document.getElementById('lw-key').value.trim().toUpperCase();
+  const btn = document.getElementById('lw-btn');
+  const err = document.getElementById('lw-err');
+  if(!key){ err.textContent = 'Ingresa la clave / Enter key'; return; }
+  btn.textContent = 'Validando...'; btn.disabled = true;
+  
+  await new Promise(r => setTimeout(r, 600));
+  
+  let lic = null;
+  if(DEMO_KEYS[key]){ lic = {...DEMO_KEYS[key], key}; }
+  else {
+    // Try Supabase
+    const sbKey = getSbKey();
+    if(sbKey){
+      try {
+        const r = await fetch(`${SB_URL}/rest/v1/zytek_licenses?key=eq.${encodeURIComponent(key)}&select=*&active=eq.true&limit=1`, {
+          headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}` }
+        });
+        const data = await r.json();
+        if(data?.length){ const l = data[0]; lic = { key, tenant: l.tenant_name, plan: l.plan, expires: l.expires_at, tenantId: l.tenant_id }; }
+      } catch(e){}
+    }
+  }
+  
+  if(lic){
+    currentLicense = lic;
+    localStorage.setItem('zytek_pos_lic', JSON.stringify(lic));
+    document.getElementById('license-wall').style.display = 'none';
+    document.getElementById('pos-app').classList.add('ready');
+    updateClock();
+    setInterval(updateClock, 1000);
+    loadMenu();
+  } else {
+    err.textContent = 'Clave inválida / Invalid key';
+    btn.textContent = 'Activar / Activate';
+    btn.disabled = false;
+  }
+}
+
+// SB CONFIG
+const SB_URL = 'https://djkmhjtkspwcbkjkcigz.supabase.co';
+function getSbKey(){ return localStorage.getItem('zytek_sb_key') || ''; }
+
+// CLOCK
+function updateClock(){
+  const now = new Date();
+  document.getElementById('pos-time').textContent = now.toLocaleTimeString('es-VE', {hour:'2-digit', minute:'2-digit'});
+  document.getElementById('pos-date').textContent = now.toLocaleDateString('es-VE', {day:'2-digit', month:'2-digit', year:'numeric'});
+}
+
+// MENU
+async function loadMenu(){
+  const key = getSbKey();
+  if(!key){ showToast('Configura la API key en localStorage(zytek_sb_key)', 'error'); return; }
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/menu_items?activo=eq.true&select=*&order=cat.asc,nombre.asc`, {
+      headers: { apikey: key, Authorization: `Bearer ${key}` }
+    });
+    const data = await r.json();
+    menuItems = Array.isArray(data) ? data : [];
+    extractCategories();
+    renderCats();
+    renderMenu();
+  } catch(e){ showToast('Error cargando menú / Error loading menu', 'error'); }
+}
+
+function extractCategories(){
+  const cats = {};
+  menuItems.forEach(i => {
+    const c = i.cat || 'Otros';
+    if(!cats[c]) cats[c] = [];
+    cats[c].push(i);
+  });
+  categories = Object.keys(cats).sort();
+}
+
+function renderCats(){
+  const el = document.getElementById('menu-cats');
+  el.innerHTML = `<button class="menu-cat-btn ${currentCat==='all'?'active':''}" onclick="filterCat('all')">Todos / All</button>`;
+  categories.forEach(c => {
+    el.innerHTML += `<button class="menu-cat-btn ${currentCat===c?'active':''}" onclick="filterCat('${c}')">${c}</button>`;
+  });
+}
+
+function filterCat(cat){
+  currentCat = cat;
+  document.querySelectorAll('.menu-cat-btn').forEach(b => {
+    b.classList.toggle('active', b.textContent.includes(cat) || (cat==='all' && b.textContent.includes('Todos')));
+  });
+  renderMenu();
+}
+
+function renderMenu(){
+  const grid = document.getElementById('menu-grid');
+  const items = currentCat === 'all' ? menuItems : menuItems.filter(i => (i.cat || 'Otros') === currentCat);
+  
+  if(!items.length){
+    grid.innerHTML = '<div class="menu-empty">Sin productos / No products</div>';
+    return;
+  }
+  
+  grid.innerHTML = items.map(i => `
+    <div class="menu-item" onclick="addToOrder('${i.id}')">
+      <div class="menu-item-img">${i.emoji || '🍽️'}</div>
+      <div class="menu-item-name">${i.nombre}</div>
+      <div class="menu-item-price">$${parseFloat(i.precio).toFixed(2)}</div>
+    </div>
+  `).join('');
+}
+
+// ORDER
+function addToOrder(id){
+  const item = menuItems.find(i => i.id === id);
+  if(!item) return;
+  
+  const existing = order.find(o => o.id === id);
+  if(existing){
+    existing.qty++;
+  } else {
+    order.push({ id: item.id, nombre: item.nombre, precio: parseFloat(item.precio), qty: 1 });
+  }
+  
+  renderOrder();
+  showToast(`+ ${item.nombre}`, 'success');
+}
+
+function changeQty(id, delta){
+  const item = order.find(o => o.id === id);
+  if(!item) return;
+  item.qty += delta;
+  if(item.qty <= 0){
+    order = order.filter(o => o.id !== id);
+  }
+  renderOrder();
+}
+
+function renderOrder(){
+  const el = document.getElementById('order-items');
+  const countEl = document.getElementById('order-count');
+  const totalEl = document.getElementById('order-total');
+  const btnEl = document.getElementById('cobrar-btn');
+  
+  const total = order.reduce((s, i) => s + i.precio * i.qty, 0);
+  const count = order.reduce((s, i) => s + i.qty, 0);
+  
+  if(!order.length){
+    el.innerHTML = '<div class="order-empty">Tap items to add<br>Tap para agregar</div>';
+    countEl.textContent = '0 items';
+    totalEl.textContent = '$0.00';
+    btnEl.disabled = true;
+    return;
+  }
+  
+  el.innerHTML = order.map(i => `
+    <div class="order-item">
+      <div class="order-item-info">
+        <div class="order-item-name">${i.nombre}</div>
+        <div class="order-item-price">$${(i.precio * i.qty).toFixed(2)}</div>
+      </div>
+      <div class="order-item-qty">
+        <button class="qty-btn" onclick="changeQty('${i.id}', -1)">−</button>
+        <span class="qty-num">${i.qty}</span>
+        <button class="qty-btn" onclick="changeQty('${i.id}', 1)">+</button>
+      </div>
+    </div>
+  `).join('');
+  
+  countEl.textContent = `${count} item${count>1?'s':''}`;
+  totalEl.textContent = `$${total.toFixed(2)}`;
+  btnEl.disabled = false;
+}
+
+function selectPay(el){
+  document.querySelectorAll('.pay-btn').forEach(b => b.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedPay = el.dataset.method;
+}
+
+// PROCESS SALE
+async function procesarVenta(){
+  if(!order.length) return;
+  
+  const total = order.reduce((s, i) => s + i.precio * i.qty, 0);
+  const saleId = 'S' + Date.now();
+  const now = new Date().toISOString();
+  const key = getSbKey();
+  const tenantId = currentLicense?.tenantId || '00000000-0000-0000-0000-000000000001';
+  
+  if(!key){ showToast('Configura la API key', 'error'); return; }
+  
+  // Sale record
+  const sale = {
+    id: saleId,
+    tenant_id: tenantId,
+    total: total,
+    payment_method: selectedPay,
+    created_at: now,
+    tipo: 'venta',
+    items: order.map(i => ({ id: i.id, nombre: i.nombre, precio: i.precio, cantidad: i.qty, subtotal: i.precio * i.qty })),
+    cajero: currentLicense?.tenant || 'POS Lite',
+  };
+  
+  try {
+    // Save to Supabase
+    const r = await fetch(`${SB_URL}/rest/v1/ventas`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': key,
+        'Authorization': `Bearer ${key}`,
+        'Prefer': 'return=representation'
+      },
+      body: JSON.stringify(sale)
+    });
+    
+    // Show success
+    document.getElementById('success-amount').textContent = `$${total.toFixed(2)}`;
+    document.getElementById('success-method').textContent = selectedPay.charAt(0).toUpperCase() + selectedPay.slice(1);
+    document.getElementById('success-overlay').classList.add('show');
+    
+    // Clear order
+    order = [];
+    renderOrder();
+    
+  } catch(e){
+    showToast('Error procesando venta / Sale error', 'error');
+  }
+}
+
+function cerrarSuccess(){
+  document.getElementById('success-overlay').classList.remove('show');
+}
+
+function imprimirTicket(){
+  showToast('Imprimiendo ticket... / Printing...', 'success');
+  // Placeholder for print functionality
+}
+
+// TOAST
+function showToast(msg, type='success'){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast ${type} show`;
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+// THEME
+function toggleTheme(){
+  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+  document.documentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
+}
+
+// INIT
+(function init(){
+  // Check saved license
+  const saved = localStorage.getItem('zytek_pos_lic');
+  if(saved){
+    try {
+      currentLicense = JSON.parse(saved);
+      document.getElementById('license-wall').style.display = 'none';
+      document.getElementById('pos-app').classList.add('ready');
+      updateClock();
+      setInterval(updateClock, 1000);
+      loadMenu();
+    } catch(e){}
+  }
+  
+  // Demo key shortcuts
+  document.getElementById('lw-key').addEventListener('keydown', e => {
+    if(e.key === 'Enter') activateLicense();
+  });
+  
+  // Enter key for quick activate in dev
+  document.addEventListener('keydown', e => {
+    if(e.ctrlKey && e.key === 'd'){
+      setKey('ZYTEK-DEMO-ENT-2025');
+      activateLicense();
+    }
+  });
+})();
+</script>
+</body>
+</html>

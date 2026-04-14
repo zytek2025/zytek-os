@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ZytekOS — Admin Lite</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@700;900&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="zytek-core.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+[data-theme="light"]{--bg:#f4f4f8;--surface:#fff;--surface2:#f0f0f5;--topbar:#fff;--border:rgba(0,0,0,.1);--border2:rgba(0,0,0,.18);--text:#111118;--text-mid:#444455;--text-dim:#888899}
+html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text)}
+body{padding:20px;padding-bottom:80px}
+
+/* LICENSE */
+#license-wall{position:fixed;inset:0;z-index:99999;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:16px}
+.lw-box{max-width:380px;width:100%;text-align:center}
+.lw-logo{width:48px;height:48px;background:var(--orange);border-radius:10px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-size:22px;font-weight:900;color:#fff}
+.lw-title{font-family:'Fraunces',serif;font-size:20px;font-weight:700;margin-bottom:4px}
+.lw-sub{font-size:9px;font-family:'DM Mono',monospace;color:var(--text-dim);letter-spacing:2px;margin-bottom:18px}
+.lw-input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:11px 12px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;letter-spacing:1px;text-transform:uppercase;outline:none;margin-bottom:8px}
+.lw-input:focus{border-color:var(--orange)}
+.lw-err{font-size:10px;color:var(--red);margin-bottom:8px;min-height:14px;font-family:'DM Mono',monospace;text-align:left}
+.lw-btn{width:100%;padding:12px;background:var(--orange);border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;cursor:pointer}
+.dk-box{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:left;margin-top:12px}
+.dk-title{font-size:9px;font-family:'DM Mono',monospace;color:var(--text-dim);letter-spacing:2px;margin-bottom:6px}
+.dk-item{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);cursor:pointer;font-size:11px;font-family:'DM Mono',monospace}
+.dk-item:last-child{border:none}
+.dk-key{color:var(--orange)}
+
+/* HEADER */
+.admin-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px}
+.brand{display:flex;align-items:center;gap:10px}
+.brand-z{font-size:24px}
+.brand-name{font-family:'Fraunces',serif;font-size:16px;font-weight:900}
+.dt-wrap{text-align:right}
+.dt-time{font-family:'DM Mono',monospace;font-size:14px;font-weight:700}
+.dt-date{font-size:10px;color:var(--text-dim);font-family:'DM Mono',monospace}
+
+/* KPIs */
+.kpi-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center}
+.kpi-label{font-size:9px;font-family:'DM Mono',monospace;letter-spacing:1px;text-transform:uppercase;color:var(--text-dim);margin-bottom:6px}
+.kpi-val{font-family:'Fraunces',serif;font-size:24px;font-weight:900}
+.kpi-val.green{color:var(--green)}
+.kpi-val.orange{color:var(--orange)}
+
+/* FILTER BAR */
+.filter-bar{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
+.filter-btn{padding:6px 14px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--text-mid);font-size:11px;font-weight:600;cursor:pointer;transition:all .13s}
+.filter-btn:hover{border-color:var(--orange);color:var(--orange)}
+.filter-btn.active{background:var(--orange);border-color:var(--orange);color:#fff}
+.date-input{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--text);font-size:11px;font-family:'DM Mono',monospace}
+
+/* CARD */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:14px;overflow:hidden}
+.card-head{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:8px}
+.card-title{font-size:12px;font-weight:700}
+.card-sub{font-size:10px;color:var(--text-dim);margin-top:2px}
+.card-body{padding:0}
+
+/* TABS */
+.tab-bar{display:flex;gap:2px;border-bottom:1px solid var(--border);margin-bottom:14px}
+.tab{padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;color:var(--text-dim);border-bottom:2px solid transparent;transition:all .13s}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--orange);border-bottom-color:var(--orange)}
+
+/* TABLE */
+.tbl{width:100%;border-collapse:collapse}
+.tbl th{font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--text-dim);font-family:'DM Mono',monospace;padding:8px 12px;text-align:left;background:var(--surface2);border-bottom:1px solid var(--border)}
+.tbl td{padding:10px 12px;border-bottom:1px solid var(--border);font-size:12px;color:var(--text-mid)}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:hover td{background:rgba(255,124,32,.03)}
+
+/* BADGE */
+.badge{display:inline-flex;font-size:10px;font-family:'DM Mono',monospace;padding:2px 8px;border-radius:5px;font-weight:600}
+.b-green{background:var(--green-dim);color:var(--green)}
+.b-orange{background:var(--orange-dim);color:var(--orange)}
+.b-blue{background:var(--blue-dim);color:var(--blue)}
+.b-gray{background:var(--surface2);color:var(--text-dim)}
+
+/* SWITCH */
+.sw{width:32px;height:18px;border-radius:9px;background:var(--surface2);border:1px solid var(--border);position:relative;cursor:pointer;flex-shrink:0}
+.sw.on{background:var(--orange);border-color:var(--orange)}
+.sw::after{content:'';position:absolute;width:12px;height:12px;border-radius:50%;background:#fff;top:2px;left:3px;transition:transform .2s}
+.sw.on::after{transform:translateX(14px)}
+
+/* EDIT MODAL */
+.modal{position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;padding:16px}
+.modal.open{display:flex}
+.modal-box{background:var(--surface);border:1px solid var(--border2);border-radius:12px;width:100%;max-width:400px;max-height:90vh;overflow-y:auto}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border)}
+.modal-title{font-family:'Fraunces',serif;font-size:14px;font-weight:700}
+.modal-close{width:24px;height:24px;border-radius:6px;background:var(--surface2);border:1px solid var(--border);color:var(--text-mid);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px}
+.modal-body{padding:16px}
+.fgroup{margin-bottom:12px}
+.flabel{font-size:9px;font-family:'DM Mono',monospace;letter-spacing:1px;text-transform:uppercase;color:var(--text-dim);margin-bottom:4px;display:block}
+.finput{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px;width:100%;outline:none}
+.finput:focus{border-color:var(--orange)}
+.modal-foot{padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end}
+.btn{padding:8px 16px;border-radius:7px;border:none;cursor:pointer;font-size:12px;font-weight:600;transition:all .13s}
+.btn-primary{background:var(--orange);color:#fff}
+.btn-ghost{background:transparent;color:var(--text-mid);border:1px solid var(--border)}
+
+/* TOAST */
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);padding:10px 20px;border-radius:8px;font-weight:600;font-family:'DM Mono',monospace;font-size:12px;z-index:9999;opacity:0;transition:opacity .3s;white-space:nowrap}
+.toast.show{opacity:1}
+.toast.error{background:var(--red);color:#fff}
+.toast.success{background:var(--green);color:#000}
+
+/* TOP ITEMS */
+.top-items{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;padding:12px}
+.top-item{display:flex;align-items:center;gap:10px;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px}
+.top-item-rank{font-size:16px;font-weight:700;color:var(--orange);width:24px;text-align:center}
+.top-item-info{flex:1}
+.top-item-name{font-size:12px;font-weight:600}
+.top-item-meta{font-size:10px;color:var(--text-dim);font-family:'DM Mono',monospace}
+.top-item-sales{font-size:14px;font-weight:700;color:var(--green);font-family:'DM Mono',monospace}
+
+/* THEME BUTTON */
+.theme-btn{position:fixed;bottom:16px;right:16px;width:40px;height:40px;border-radius:50%;border:1px solid var(--border);background:var(--surface);color:var(--amber);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;z-index:100}
+</style>
+</head>
+<body>
+
+<!-- LICENSE WALL -->
+<div id="license-wall">
+  <div class="lw-box">
+    <div class="lw-logo">Z</div>
+    <div class="lw-title">Admin Lite</div>
+    <div class="lw-sub">ZYTEK OS · SALES PANEL</div>
+    <input type="text" class="lw-input" id="lw-key" placeholder="ZYTEK-XXXX-XXXX-XXXX" autocomplete="off">
+    <div class="lw-err" id="lw-err"></div>
+    <button class="lw-btn" onclick="activateLicense()">Activar / Activate</button>
+    <div class="dk-box">
+      <div class="dk-title">DEMO KEYS</div>
+      <div class="dk-item" onclick="setKey('ZYTEK-DEMO-PRO-2025')"><span class="dk-key">ZYTEK-DEMO-PRO-2025</span><span style="color:var(--text-dim);font-size:9px">PRO</span></div>
+      <div class="dk-item" onclick="setKey('ZYTEK-DEMO-ENT-2025')"><span class="dk-key">ZYTEK-DEMO-ENT-2025</span><span style="color:var(--text-dim);font-size:9px">ENTERPRISE</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ADMIN PANEL -->
+<div id="admin-panel" style="display:none">
+
+  <div class="admin-header">
+    <div class="brand">
+      <span class="brand-z">📊</span>
+      <span class="brand-name">Admin Lite</span>
+    </div>
+    <div class="dt-wrap">
+      <div class="dt-time" id="dt-time">--:--</div>
+      <div class="dt-date" id="dt-date">--/--/----</div>
+    </div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpi-row">
+    <div class="kpi"><div class="kpi-label">Ventas Hoy / Today</div><div class="kpi-val green" id="kpi-hoy">$0.00</div></div>
+    <div class="kpi"><div class="kpi-label">Esta Semana / Week</div><div class="kpi-val" id="kpi-semana">$0.00</div></div>
+    <div class="kpi"><div class="kpi-label">Este Mes / Month</div><div class="kpi-val orange" id="kpi-mes">$0.00</div></div>
+  </div>
+
+  <!-- FILTER BAR -->
+  <div class="filter-bar">
+    <button class="filter-btn active" data-range="today" onclick="setRange('today', this)">Hoy</button>
+    <button class="filter-btn" data-range="week" onclick="setRange('week', this)">Semana</button>
+    <button class="filter-btn" data-range="month" onclick="setRange('month', this)">Mes</button>
+    <button class="filter-btn" data-range="custom" onclick="setRange('custom', this)">Rango</button>
+    <input type="date" class="date-input" id="date-desde" style="display:none">
+    <input type="date" class="date-input" id="date-hasta" style="display:none">
+  </div>
+
+  <!-- TABS -->
+  <div class="tab-bar">
+    <div class="tab active" data-tab="sales" onclick="switchTab('sales', this)">📋 Ventas / Sales</div>
+    <div class="tab" data-tab="top" onclick="switchTab('top', this)">🏆 Top Items</div>
+    <div class="tab" data-tab="menu" onclick="switchTab('menu', this)">🍽️ Menú / Menu</div>
+  </div>
+
+  <!-- SALES TAB -->
+  <div id="tab-sales">
+    <div class="card">
+      <div class="card-head">
+        <div><div class="card-title">Lista de Ventas / Sales List</div><div class="card-sub" id="sales-count">0 ventas</div></div>
+      </div>
+      <div class="card-body" style="overflow-x:auto">
+        <table class="tbl">
+          <thead><tr><th>Hora</th><th>Método / Method</th><th>Items</th><th>Total</th></tr></thead>
+          <tbody id="sales-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOP ITEMS TAB -->
+  <div id="tab-top" style="display:none">
+    <div class="card">
+      <div class="card-head">
+        <div><div class="card-title">Más Vendidos / Top Sellers</div><div class="card-sub" id="top-count">0 productos</div></div>
+      </div>
+      <div class="top-items" id="top-items"></div>
+    </div>
+  </div>
+
+  <!-- MENU TAB -->
+  <div id="tab-menu" style="display:none">
+    <div class="card">
+      <div class="card-head">
+        <div><div class="card-title">Gestionar Menú / Manage Menu</div><div class="card-sub" id="menu-count">0 items</div></div>
+      </div>
+      <div class="card-body" style="overflow-x:auto">
+        <table class="tbl">
+          <thead><tr><th>Nombre</th><th>Categoría</th><th>Precio</th><th>Activo</th><th></th></tr></thead>
+          <tbody id="menu-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- EDIT MODAL -->
+<div class="modal" id="edit-modal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div class="modal-title">Editar / Edit</div>
+      <button class="modal-close" onclick="closeEdit()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-id">
+      <div class="fgroup">
+        <label class="flabel">NOMBRE / NAME</label>
+        <input type="text" class="finput" id="edit-nombre">
+      </div>
+      <div class="fgroup">
+        <label class="flabel">PRECIO / PRICE ($)</label>
+        <input type="number" step="0.01" min="0" class="finput" id="edit-precio">
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeEdit()">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveEdit()">Guardar / Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- THEME -->
+<button class="theme-btn" onclick="toggleTheme()">☀️</button>
+
+<script>
+let currentLicense = null;
+let currentRange = 'today';
+let salesData = [];
+let menuData = [];
+
+const SB_URL = 'https://djkmhjtkspwcbkjkcigz.supabase.co';
+function getSbKey(){ return localStorage.getItem('zytek_sb_key') || ''; }
+
+const DEMO_KEYS = {
+  'ZYTEK-DEMO-PRO-2025': { tenant:'Demo Pro', plan:'pro', expires:'2099-12-31' },
+  'ZYTEK-DEMO-ENT-2025': { tenant:'Demo Ent', plan:'ent', expires:'2099-12-31' },
+  'ZYTEK-DANI-FULL-2025': { tenant:'Zytek LLC', plan:'ent', expires:'2099-12-31' },
+};
+
+function setKey(k){ document.getElementById('lw-key').value = k; }
+
+async function activateLicense(){
+  const key = document.getElementById('lw-key').value.trim().toUpperCase();
+  const err = document.getElementById('lw-err');
+  if(!key){ err.textContent = 'Ingresa la clave'; return; }
+  
+  let lic = DEMO_KEYS[key] ? {...DEMO_KEYS[key], key} : null;
+  
+  if(!lic){
+    const sbKey = getSbKey();
+    if(sbKey){
+      try {
+        const r = await fetch(`${SB_URL}/rest/v1/zytek_licenses?key=eq.${encodeURIComponent(key)}&select=*&active=eq.true&limit=1`, {
+          headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}` }
+        });
+        const data = await r.json();
+        if(data?.length){ const l = data[0]; lic = { key, tenant: l.tenant_name, plan: l.plan, expires: l.expires_at, tenantId: l.tenant_id }; }
+      } catch(e){}
+    }
+  }
+  
+  if(lic){
+    currentLicense = lic;
+    localStorage.setItem('zytek_admin_lic', JSON.stringify(lic));
+    document.getElementById('license-wall').style.display = 'none';
+    document.getElementById('admin-panel').style.display = 'block';
+    updateClock();
+    setInterval(updateClock, 1000);
+    loadData();
+  } else {
+    err.textContent = 'Clave inválida / Invalid key';
+  }
+}
+
+function updateClock(){
+  const now = new Date();
+  document.getElementById('dt-time').textContent = now.toLocaleTimeString('es-VE', {hour:'2-digit', minute:'2-digit'});
+  document.getElementById('dt-date').textContent = now.toLocaleDateString('es-VE', {day:'2-digit', month:'2-digit', year:'numeric'});
+}
+
+// DATE RANGE
+function setRange(range, btn){
+  currentRange = range;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn?.classList.add('active');
+  
+  const customInputs = document.getElementById('date-desde').style;
+  if(range === 'custom'){
+    customInputs.display = 'inline-block';
+    document.getElementById('date-hasta').style.display = 'inline-block';
+  } else {
+    customInputs.display = 'none';
+    document.getElementById('date-hasta').style.display = 'none';
+    loadData();
+  }
+}
+
+// TABS
+function switchTab(tab, el){
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el?.classList.add('active');
+  
+  document.getElementById('tab-sales').style.display = tab === 'sales' ? 'block' : 'none';
+  document.getElementById('tab-top').style.display = tab === 'top' ? 'block' : 'none';
+  document.getElementById('tab-menu').style.display = tab === 'menu' ? 'block' : 'none';
+}
+
+// DATA LOADING
+async function loadData(){
+  const sbKey = getSbKey();
+  if(!sbKey){ showToast('Configura la API key', 'error'); return; }
+  
+  const tenantId = currentLicense?.tenantId || '00000000-0000-0000-0000-000000000001';
+  const now = new Date();
+  
+  // Date ranges
+  let desde, hasta;
+  if(currentRange === 'today'){
+    desde = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+    hasta = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59).toISOString();
+  } else if(currentRange === 'week'){
+    const day = now.getDay();
+    desde = new Date(now.getFullYear(), now.getMonth(), now.getDate() - day).toISOString();
+    hasta = new Date(now.getFullYear(), now.getMonth(), now.getDate() + (6 - day), 23, 59, 59).toISOString();
+  } else if(currentRange === 'month'){
+    desde = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    hasta = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
+  } else {
+    desde = (document.getElementById('date-desde').value) ? new Date(document.getElementById('date-desde').value + 'T00:00:00').toISOString() : null;
+    hasta = (document.getElementById('date-hasta').value) ? new Date(document.getElementById('date-hasta').value + 'T23:59:59').toISOString() : null;
+  }
+  
+  try {
+    // Load sales
+    let query = `tenant_id=eq.${tenantId}&select=*&order=created_at.desc`;
+    if(desde) query += `&created_at=gte.${desde}`;
+    if(hasta) query += `&created_at=lte.${hasta}`;
+    
+    const r = await fetch(`${SB_URL}/rest/v1/ventas?${query}`, {
+      headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}` }
+    });
+    salesData = await r.json() || [];
+    
+    renderKPIs();
+    renderSales();
+    renderTopItems();
+    
+    // Load menu
+    const mr = await fetch(`${SB_URL}/rest/v1/menu_items?select=*&order=nombre.asc`, {
+      headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}` }
+    });
+    menuData = await mr.json() || [];
+    renderMenu();
+    
+  } catch(e){ showToast('Error cargando datos', 'error'); }
+}
+
+// KPIs
+function renderKPIs(){
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  
+  const weekStart = new Date(today);
+  weekStart.setDate(today.getDate() - today.getDay());
+  
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  
+  const hoy = salesData.filter(s => new Date(s.created_at) >= today).reduce((t,s) => t + parseFloat(s.total || 0), 0);
+  const semana = salesData.filter(s => new Date(s.created_at) >= weekStart).reduce((t,s) => t + parseFloat(s.total || 0), 0);
+  const mes = salesData.filter(s => new Date(s.created_at) >= monthStart).reduce((t,s) => t + parseFloat(s.total || 0), 0);
+  
+  document.getElementById('kpi-hoy').textContent = `$${hoy.toFixed(2)}`;
+  document.getElementById('kpi-semana').textContent = `$${semana.toFixed(2)}`;
+  document.getElementById('kpi-mes').textContent = `$${mes.toFixed(2)}`;
+}
+
+// SALES TABLE
+function renderSales(){
+  const tbody = document.getElementById('sales-tbody');
+  document.getElementById('sales-count').textContent = `${salesData.length} venta${salesData.length!==1?'s':''}`;
+  
+  if(!salesData.length){
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-dim);padding:30px">Sin ventas / No sales</td></tr>';
+    return;
+  }
+  
+  tbody.innerHTML = salesData.slice(0, 100).map(s => {
+    const date = new Date(s.created_at);
+    const time = date.toLocaleTimeString('es-VE', {hour:'2-digit', minute:'2-digit'});
+    const items = Array.isArray(s.items) ? s.items.reduce((t,i) => t + (i.cantidad || 1), 0) : 0;
+    const method = s.payment_method || 'efectivo';
+    const methodLabels = { efectivo:'💵 Efectivo', tarjeta:'💳 Tarjeta', zelle:'📱 Zelle', otro:'📋 Otro' };
+    
+    return `<tr>
+      <td>${time}</td>
+      <td><span class="badge b-blue">${methodLabels[method] || method}</span></td>
+      <td>${items} item${items!==1?'s':''}</td>
+      <td style="font-weight:700;color:var(--green);font-family:'DM Mono',monospace">$${parseFloat(s.total||0).toFixed(2)}</td>
+    </tr>`;
+  }).join('');
+}
+
+// TOP ITEMS
+function renderTopItems(){
+  const topEl = document.getElementById('top-items');
+  document.getElementById('top-count').textContent = `${menuData.length} productos`;
+  
+  // Aggregate sales items
+  const itemSales = {};
+  salesData.forEach(s => {
+    if(Array.isArray(s.items)){
+      s.items.forEach(item => {
+        const id = item.id || item.name || Math.random().toString(36);
+        if(!itemSales[id]) itemSales[id] = { name: item.nombre || item.name || 'Unknown', qty: 0, total: 0 };
+        itemSales[id].qty += item.cantidad || 1;
+        itemSales[id].total += (item.subtotal || item.precio || 0) * (item.cantidad || 1);
+      });
+    }
+  });
+  
+  const topItems = Object.values(itemSales).sort((a,b) => b.total - a.total).slice(0, 10);
+  
+  if(!topItems.length){
+    topEl.innerHTML = '<div style="padding:30px;text-align:center;color:var(--text-dim)">Sin datos / No data</div>';
+    return;
+  }
+  
+  topEl.innerHTML = topItems.map((item, i) => `
+    <div class="top-item">
+      <div class="top-item-rank">${i+1}</div>
+      <div class="top-item-info">
+        <div class="top-item-name">${item.name}</div>
+        <div class="top-item-meta">${item.qty} sold</div>
+      </div>
+      <div class="top-item-sales">$${item.total.toFixed(2)}</div>
+    </div>
+  `).join('');
+}
+
+// MENU MANAGEMENT
+function renderMenu(){
+  const tbody = document.getElementById('menu-tbody');
+  document.getElementById('menu-count').textContent = `${menuData.length} items`;
+  
+  tbody.innerHTML = menuData.map(item => `
+    <tr>
+      <td>${item.nombre}</td>
+      <td><span class="badge b-gray">${item.cat || '—'}</span></td>
+      <td style="font-family:'DM Mono',monospace">$${parseFloat(item.precio||0).toFixed(2)}</td>
+      <td><div class="sw ${item.activo!==false?'on':''}" onclick="toggleActivo('${item.id}')"></div></td>
+      <td><button class="btn btn-ghost" style="padding:4px 10px;font-size:10px" onclick="openEdit('${item.id}')">✏️</button></td>
+    </tr>
+  `).join('');
+}
+
+async function toggleActivo(id){
+  const item = menuData.find(m => m.id === id);
+  if(!item) return;
+  
+  const newActivo = item.activo === false ? true : false;
+  const sbKey = getSbKey();
+  if(!sbKey){ showToast('Configura la API key', 'error'); return; }
+  
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/menu_items?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': sbKey,
+        'Authorization': `Bearer ${sbKey}`,
+        'Prefer': 'return=representation'
+      },
+      body: JSON.stringify({ activo: newActivo })
+    });
+    if(r.ok){
+      item.activo = newActivo;
+      renderMenu();
+      showToast(newActivo ? 'Activado / Activated' : 'Desactivado / Deactivated', 'success');
+    }
+  } catch(e){ showToast('Error / Error', 'error'); }
+}
+
+function openEdit(id){
+  const item = menuData.find(m => m.id === id);
+  if(!item) return;
+  document.getElementById('edit-id').value = id;
+  document.getElementById('edit-nombre').value = item.nombre || '';
+  document.getElementById('edit-precio').value = parseFloat(item.precio || 0);
+  document.getElementById('edit-modal').classList.add('open');
+}
+
+function closeEdit(){
+  document.getElementById('edit-modal').classList.remove('open');
+}
+
+async function saveEdit(){
+  const id = document.getElementById('edit-id').value;
+  const nombre = document.getElementById('edit-nombre').value.trim();
+  const precio = parseFloat(document.getElementById('edit-precio').value) || 0;
+  
+  if(!nombre){ showToast('Nombre requerido', 'error'); return; }
+  
+  const sbKey = getSbKey();
+  if(!sbKey){ showToast('Configura la API key', 'error'); return; }
+  
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/menu_items?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': sbKey,
+        'Authorization': `Bearer ${sbKey}`
+      },
+      body: JSON.stringify({ nombre, precio })
+    });
+    
+    if(r.ok){
+      const item = menuData.find(m => m.id === id);
+      if(item){ item.nombre = nombre; item.precio = precio; }
+      renderMenu();
+      closeEdit();
+      showToast('Guardado / Saved', 'success');
+    }
+  } catch(e){ showToast('Error / Error', 'error'); }
+}
+
+// TOAST
+function showToast(msg, type='success'){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast ${type} show`;
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// THEME
+function toggleTheme(){
+  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+  document.documentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
+}
+
+// INIT
+(function init(){
+  const saved = localStorage.getItem('zytek_admin_lic');
+  if(saved){
+    try {
+      currentLicense = JSON.parse(saved);
+      document.getElementById('license-wall').style.display = 'none';
+      document.getElementById('admin-panel').style.display = 'block';
+      updateClock();
+      setInterval(updateClock, 1000);
+      loadData();
+    } catch(e){}
+  }
+  
+  document.getElementById('lw-key').addEventListener('keydown', e => {
+    if(e.key === 'Enter') activateLicense();
+  });
+  
+  // Ctrl+D for demo
+  document.addEventListener('keydown', e => {
+    if(e.ctrlKey && e.key === 'd'){
+      setKey('ZYTEK-DEMO-ENT-2025');
+      activateLicense();
+    }
+  });
+})();
+</script>
+</body>
+</html>
