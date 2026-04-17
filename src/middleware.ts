@@ -73,7 +73,8 @@ function addSecurityHeaders(response: NextResponse): NextResponse {
 
 const PUBLIC_PREFIXES = [
   '/_next', '/favicon', '/modules',
-  '/api/license', '/api/auth', '/api/modules',
+  '/api/license', '/api/auth',
+  '/auth/callback',  // receive handoff from zytek.app
   '/',
 ]
 
@@ -199,9 +200,21 @@ export async function middleware(req: NextRequest) {
     }
   }
 
+  const LANDING_LOGIN = process.env.NEXT_PUBLIC_LANDING_URL
+    ? `${process.env.NEXT_PUBLIC_LANDING_URL}/login`
+    : 'https://zytek.app/login'
+
   if (PROTECTED_MODS.some(p => pathname.startsWith(p))) {
-    const response = NextResponse.next()
-    return addSecurityHeaders(response)
+    const sessionCookie = req.cookies.get('zytek-session')?.value
+    if (!sessionCookie) {
+      // No session → redirect to zytek.app/login
+      const loginUrl = new URL(LANDING_LOGIN)
+      loginUrl.searchParams.set('next', req.nextUrl.href)
+      const response = NextResponse.redirect(loginUrl)
+      return addSecurityHeaders(response)
+    }
+    // Session exists — let through (API routes already verify JWT)
+    return addSecurityHeaders(NextResponse.next())
   }
 
   return addSecurityHeaders(NextResponse.next())
@@ -213,5 +226,6 @@ export const config = {
     '/pos/:path*', '/admin/:path*', '/crm/:path*',
     '/kds/:path*', '/mesero/:path*', '/retail/:path*',
     '/constructor/:path*', '/fintrack/:path*',
+    '/auth/:path*',
   ],
 }
