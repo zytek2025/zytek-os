@@ -22,6 +22,7 @@ export interface SidebarItem {
   label: string
   section: string  // ID del sec- que muestra en el content
   tier: PlanTier
+  locked?: boolean  // Añadido por getVisibleSidebar
 }
 
 // ── MAPA COMPLETO DEL SIDEBAR ──────────────────────────────
@@ -35,8 +36,8 @@ export const ADMIN_SIDEBAR: SidebarSection[] = [
       { id: 'nav-categorias',  icon: '🗂️', label: 'Categorías',      section: 'sec-categorias',  tier: 'lite' },
       { id: 'nav-subgrupos',   icon: '📐', label: 'Sub-grupos',      section: 'sec-subgrupos',   tier: 'lite' },
       { id: 'nav-items',       icon: '🍽️', label: 'Ítems / Platos',  section: 'sec-items',       tier: 'lite' },
-      { id: 'nav-mod-grupos',  icon: '🔧', label: 'Grupos de Mods',  section: 'sec-mod-grupos',  tier: 'lite' },
-      { id: 'nav-mod-items',   icon: '✏️', label: 'Modificadores',   section: 'sec-mod-items',   tier: 'lite' },
+      { id: 'nav-mod-items',   icon: '🎛️', label: 'Pool de Mods',    section: 'sec-mod-items',   tier: 'lite' },
+      { id: 'nav-mod-grupos',  icon: '🔗', label: 'Asignar a Platos',section: 'sec-mod-grupos',  tier: 'lite' },
     ],
   },
   {

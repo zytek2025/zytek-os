@@ -1,261 +1,85 @@
 'use client'
-import { useState, useEffect } from 'react'
-import type { License } from '@/types'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import type { License, MenuItem, ZytekUser } from '@/types'
 import { supabase } from '@/lib/supabase.client'
+import { PAIS_CONFIG, type PaisId, readPaisLocal, readTasaLocal, writeTasaLocal } from '@/lib/paises'
 
 interface MenuModifier {
   id: string
   nombre: string
   emoji: string
-  tipo: 'extra' | 'sin' | 'contorno' | 'sabor' | 'variante' | 'preferencia'
-  costo: number
-}
-
-interface MenuVariant {
-  id: string
-  nombre: string
-  emoji: string
+  tipo: 'contorno' | 'extra' | 'sin' | 'seleccion'
   precio: number
-}
-
-interface MenuItemFull {
-  id: string
-  nombre: string
-  cat: string
-  precio: number
-  activo: boolean
-  emoji: string
-  agotado?: boolean
-  variantes?: MenuVariant[]
-  mods_forzados?: MenuModifier[]
-  mods_opcionales?: MenuModifier[]
-  forzarContornos?: boolean
 }
 
 interface MenuCategory {
   id: string
   nombre: string
   emoji: string
-  usaSubgrupos?: boolean
-  subgrupos?: Subgrupo[]
+  has_subgroups: boolean
 }
 
 interface Subgrupo {
   id: string
+  categoria_id: string
   nombre: string
   emoji: string
-  precio: number | null
 }
 
-const CATEGORIAS: MenuCategory[] = [
-  { id: 'entradas', nombre: 'Entradas', emoji: '🥗' },
-  { id: 'pizzas', nombre: 'Pizzas', emoji: '🍕', usaSubgrupos: true, subgrupos: [
-    { id: 'pch', nombre: 'Chica', emoji: '🍕', precio: null },
-    { id: 'pme', nombre: 'Mediana', emoji: '🍕🍕', precio: null },
-    { id: 'pgr', nombre: 'Grande', emoji: '🍕🍕🍕', precio: null },
-  ]},
-  { id: 'comidas', nombre: 'Comidas', emoji: '🍽️' },
-  { id: 'bebidas', nombre: 'Bebidas', emoji: '🥤' },
-  { id: 'postres', nombre: 'Postres', emoji: '🍰' },
-  { id: 'cocteles', nombre: 'Cócteles', emoji: '🍹' },
-  { id: 'hamburguesas', nombre: 'Hamburguesas', emoji: '🍔' },
-  { id: 'tacos', nombre: 'Tacos', emoji: '🌮', usaSubgrupos: true, subgrupos: [
-    { id: 'tac2', nombre: '2 tacos', emoji: '🌮🌮', precio: null },
-    { id: 'tac3', nombre: '3 tacos', emoji: '🌮🌮🌮', precio: null },
-    { id: 'tac5', nombre: '5 tacos', emoji: '🌮🌮🌮🌮🌮', precio: null },
-  ]},
-  { id: 'sopas', nombre: 'Sopas', emoji: '🍲' },
+interface MetodoPago {
+  id: string
+  identificador: string
+  label: string
+  emoji: string
+  moneda: 'usd' | 'bs' | 'eur' | 'mxn'
+}
+
+  // El sistema buscará dinámicamente en el estado de modificadores
+
+
+const DEMO_USERS: Array<{ pin: string | null; nombre: string; iniciales: string; nivel: number; rol: string; color: string }> = [
+  { pin: '1369', nombre: 'Daniel F.', iniciales: 'DF', nivel: 1, rol: 'Super Admin', color: '#ff7c20' },
+  { pin: '4321', nombre: 'María G.',  iniciales: 'MG', nivel: 3, rol: 'Supervisor',  color: '#38b6ff' },
+  { pin: '1234', nombre: 'Carlos R.', iniciales: 'CR', nivel: 4, rol: 'Cajero',      color: '#ffc040' },
+  { pin: '5678', nombre: 'Ana Q.',    iniciales: 'AQ', nivel: 5, rol: 'Mesero',      color: '#2ee87a' },
+  { pin: null,   nombre: 'Pedro S.',  iniciales: 'PS', nivel: 6, rol: 'Cocina',      color: '#b87fff' },
 ]
 
-const DEMO_MENU: MenuItemFull[] = [
-  { id: '1', nombre: 'Café Americano', cat: 'bebidas', precio: 3.50, activo: true, emoji: '☕',
-    variantes: [
-      { id: 'cf-a', nombre: 'Americano', emoji: '☕', precio: 3.50 },
-      { id: 'cf-e', nombre: 'Espresso', emoji: '☕', precio: 3.00 },
-      { id: 'cf-l', nombre: 'Latte', emoji: '🥛', precio: 4.50 },
-      { id: 'cf-c', nombre: 'Cappuccino', emoji: '☕', precio: 4.50 },
-    ],
-    mods_opcionales: [
-      { id: 'cfo1', nombre: 'Extra azúcar', emoji: '🍬', tipo: 'extra', costo: 0 },
-      { id: 'cfo2', nombre: 'Sin azúcar', emoji: '❌', tipo: 'sin', costo: 0 },
-    ]
-  },
-  { id: '2', nombre: 'Chocolate Caliente', cat: 'bebidas', precio: 4.00, activo: true, emoji: '🍫',
-    mods_opcionales: [
-      { id: 'ch1', nombre: 'Extra crema', emoji: '🥛', tipo: 'extra', costo: 0.5 },
-    ]
-  },
-  { id: '3', nombre: 'Jugo de Naranja', cat: 'bebidas', precio: 4.00, activo: true, emoji: '🍊' },
-  { id: '4', nombre: 'Limonada', cat: 'bebidas', precio: 3.50, activo: true, emoji: '🍋' },
-  { id: '5', nombre: 'Mojito', cat: 'cocteles', precio: 10.00, activo: true, emoji: '🍹',
-    variantes: [
-      { id: 'moj-r', nombre: 'Regular', emoji: '🍹', precio: 10 },
-      { id: 'moj-d', nombre: 'Doble', emoji: '🍹🍹', precio: 16 },
-    ],
-    mods_forzados: [
-      { id: 'moj-s', nombre: 'Con alcohol', emoji: '🥃', tipo: 'variante', costo: 0 },
-      { id: 'moj-v', nombre: 'Virgin (sin alcohol)', emoji: '🍋', tipo: 'variante', costo: -2 },
-    ],
-    mods_opcionales: [
-      { id: 'mojo1', nombre: 'Extra menta', emoji: '🌿', tipo: 'extra', costo: 0 },
-      { id: 'mojo2', nombre: 'Extra limón', emoji: '🍋', tipo: 'extra', costo: 0 },
-    ]
-  },
-  { id: '6', nombre: 'Piña Colada', cat: 'cocteles', precio: 11.00, activo: true, emoji: '🍹',
-    variantes: [
-      { id: 'pc-r', nombre: 'Regular', emoji: '🍹', precio: 11 },
-      { id: 'pc-d', nombre: 'Doble', emoji: '🍹🍹', precio: 18 },
-    ],
-    mods_forzados: [
-      { id: 'pc-a', nombre: 'Con alcohol', emoji: '🥃', tipo: 'variante', costo: 0 },
-      { id: 'pc-v', nombre: 'Virgin', emoji: '🍍', tipo: 'variante', costo: -2 },
-    ],
-    mods_opcionales: []
-  },
-  { id: '7', nombre: 'Margarita', cat: 'cocteles', precio: 12.00, activo: true, emoji: '🍸',
-    variantes: [
-      { id: 'mar-cl', nombre: 'Clásica', emoji: '🍸', precio: 12 },
-      { id: 'mar-fr', nombre: 'Frozen', emoji: '🧊', precio: 13 },
-    ],
-    mods_forzados: [
-      { id: 'mar-a', nombre: 'Con alcohol', emoji: '🥃', tipo: 'variante', costo: 0 },
-      { id: 'mar-v', nombre: 'Sin alcohol', emoji: '🍋', tipo: 'variante', costo: -2 },
-    ],
-    mods_opcionales: [
-      { id: 'maro1', nombre: 'Con sal', emoji: '🧂', tipo: 'extra', costo: 0 },
-      { id: 'maro2', nombre: 'Sin sal', emoji: '❌', tipo: 'sin', costo: 0 },
-    ]
-  },
-  { id: '8', nombre: 'Pizza Margarita', cat: 'pizzas', precio: 12.00, activo: true, emoji: '🍕',
-    variantes: [
-      { id: 'pch', nombre: 'Chica', emoji: '🍕', precio: 12 },
-      { id: 'pme', nombre: 'Mediana', emoji: '🍕🍕', precio: 16 },
-      { id: 'pgr', nombre: 'Grande', emoji: '🍕🍕🍕', precio: 20 },
-      { id: 'pfa', nombre: 'Familiar', emoji: '🍕🍕🍕🍕', precio: 26 },
-    ],
-    mods_forzados: [
-      { id: 'pmb1', nombre: 'Masa Delgada', emoji: '🫓', tipo: 'variante', costo: 0 },
-      { id: 'pmb2', nombre: 'Masa Gruesa', emoji: '🍞', tipo: 'variante', costo: 0 },
-      { id: 'pmb3', nombre: 'Masa de Queso', emoji: '🧀', tipo: 'variante', costo: 2 },
-    ],
-    mods_opcionales: [
-      { id: 'pe1', nombre: 'Extra queso', emoji: '🧀', tipo: 'extra', costo: 2 },
-      { id: 'pe2', nombre: 'Sin tomate', emoji: '🍅', tipo: 'sin', costo: 0 },
-      { id: 'pe3', nombre: 'Extra albahaca', emoji: '🌿', tipo: 'extra', costo: 0.5 },
-    ]
-  },
-  { id: '9', nombre: 'Pizza Pepperoni', cat: 'pizzas', precio: 14.00, activo: true, emoji: '🍕',
-    variantes: [
-      { id: 'pp-ch', nombre: 'Chica', emoji: '🍕', precio: 14 },
-      { id: 'pp-me', nombre: 'Mediana', emoji: '🍕🍕', precio: 18 },
-      { id: 'pp-gr', nombre: 'Grande', emoji: '🍕🍕🍕', precio: 22 },
-    ],
-    mods_forzados: [
-      { id: 'ppb1', nombre: 'Masa Delgada', emoji: '🫓', tipo: 'variante', costo: 0 },
-      { id: 'ppb2', nombre: 'Masa Gruesa', emoji: '🍞', tipo: 'variante', costo: 0 },
-    ],
-    mods_opcionales: [
-      { id: 'ppe1', nombre: 'Extra pepperoni', emoji: '🍕', tipo: 'extra', costo: 2.5 },
-      { id: 'ppe2', nombre: 'Sin cebolla', emoji: '🧅', tipo: 'sin', costo: 0 },
-      { id: 'ppe3', nombre: 'Extra queso', emoji: '🧀', tipo: 'extra', costo: 2 },
-    ]
-  },
-  { id: '10', nombre: 'Ensalada César', cat: 'entradas', precio: 14.00, activo: true, emoji: '🥗',
-    mods_opcionales: [
-      { id: 'sf1', nombre: 'Sin anchoas', emoji: '🐟', tipo: 'sin', costo: 0 },
-      { id: 'sf2', nombre: 'Sin crutones', emoji: '🍞', tipo: 'sin', costo: 0 },
-      { id: 'so1', nombre: 'Extra parmesano', emoji: '🧀', tipo: 'extra', costo: 1.5 },
-    ]
-  },
-  { id: '11', nombre: 'Hamburguesa Clásica', cat: 'hamburguesas', precio: 15.00, activo: true, emoji: '🍔',
-    variantes: [
-      { id: 'hbs', nombre: 'Sencilla', emoji: '🍔', precio: 15 },
-      { id: 'hbd', nombre: 'Doble', emoji: '🍔🍔', precio: 20 },
-    ],
-    mods_forzados: [
-      { id: 'hb1', nombre: 'Papas fritas', emoji: '🍟', tipo: 'contorno', costo: 0 },
-      { id: 'hb2', nombre: 'Aros cebolla', emoji: '🧅', tipo: 'contorno', costo: 1.5 },
-      { id: 'hb3', nombre: 'Ensalada', emoji: '🥗', tipo: 'contorno', costo: 0 },
-    ],
-    mods_opcionales: [
-      { id: 'hbo1', nombre: 'Extra queso', emoji: '🧀', tipo: 'extra', costo: 1.5 },
-      { id: 'hbo2', nombre: 'Sin tomate', emoji: '🍅', tipo: 'sin', costo: 0 },
-      { id: 'hbo3', nombre: 'Extra bacon', emoji: '🥓', tipo: 'extra', costo: 2 },
-    ]
-  },
-  { id: '12', nombre: 'Burger BBQ', cat: 'hamburguesas', precio: 17.00, activo: true, emoji: '🍔',
-    variantes: [
-      { id: 'bbqs', nombre: 'Sencilla', emoji: '🍔', precio: 17 },
-      { id: 'bbqd', nombre: 'Doble', emoji: '🍔🍔', precio: 23 },
-    ],
-    mods_forzados: [
-      { id: 'bbq1', nombre: 'Papas fritas', emoji: '🍟', tipo: 'contorno', costo: 0 },
-      { id: 'bbq2', nombre: 'Aros cebolla', emoji: '🧅', tipo: 'contorno', costo: 1 },
-    ],
-    mods_opcionales: [
-      { id: 'bbqo1', nombre: 'Extra BBQ', emoji: '🫙', tipo: 'extra', costo: 0 },
-      { id: 'bbqo2', nombre: 'Sin cebolla', emoji: '🧅', tipo: 'sin', costo: 0 },
-    ]
-  },
-  { id: '13', nombre: 'Tacos de Carne', cat: 'tacos', precio: 12.00, activo: true, emoji: '🌮',
-    variantes: [
-      { id: 'tac2', nombre: '2 tacos', emoji: '🌮🌮', precio: 12 },
-      { id: 'tac3', nombre: '3 tacos', emoji: '🌮🌮🌮', precio: 16 },
-      { id: 'tac5', nombre: '5 tacos', emoji: '🌮🌮🌮🌮🌮', precio: 24 },
-    ],
-    mods_forzados: [
-      { id: 'tac-s', nombre: 'Tortilla maíz', emoji: '🫓', tipo: 'variante', costo: 0 },
-      { id: 'tac-h', nombre: 'Tortilla harina', emoji: '🫓', tipo: 'variante', costo: 0 },
-    ],
-    mods_opcionales: [
-      { id: 'taco1', nombre: 'Extra guacamole', emoji: '🥑', tipo: 'extra', costo: 1.5 },
-      { id: 'taco2', nombre: 'Sin cilantro', emoji: '🌿', tipo: 'sin', costo: 0 },
-      { id: 'taco3', nombre: 'Extra salsa', emoji: '🌶️', tipo: 'extra', costo: 0 },
-    ]
-  },
-  { id: '14', nombre: 'Pasta Alfredo', cat: 'comidas', precio: 16.00, activo: true, emoji: '🍝',
-    variantes: [
-      { id: 'paf-p', nombre: 'Regular', emoji: '🍝', precio: 16 },
-      { id: 'paf-g', nombre: 'Grande', emoji: '🍝🍝', precio: 20 },
-    ],
-    mods_forzados: [
-      { id: 'pfc1', nombre: 'Papas fritas', emoji: '🍟', tipo: 'contorno', costo: 0 },
-      { id: 'pfc2', nombre: 'Ensalada verde', emoji: '🥗', tipo: 'contorno', costo: 0 },
-      { id: 'pfc3', nombre: 'Pan de ajo', emoji: '🧄', tipo: 'contorno', costo: 1 },
-    ],
-    mods_opcionales: [
-      { id: 'pao1', nombre: 'Extra crema', emoji: '🥛', tipo: 'extra', costo: 1 },
-      { id: 'pao2', nombre: 'Sin champiñones', emoji: '🍄', tipo: 'sin', costo: 0 },
-      { id: 'pao3', nombre: 'Con pollo', emoji: '🍗', tipo: 'extra', costo: 3 },
-    ]
-  },
-  { id: '15', nombre: 'Tiramisú', cat: 'postres', precio: 8.00, activo: true, emoji: '🍰',
-    mods_opcionales: [
-      { id: 'do1', nombre: 'Extra crema', emoji: '🥛', tipo: 'extra', costo: 1 },
-      { id: 'do2', nombre: 'Sin café', emoji: '☕', tipo: 'sin', costo: 0 },
-    ]
-  },
-  { id: '16', nombre: 'Helado 3 bolas', cat: 'postres', precio: 6.00, activo: true, emoji: '🍨',
-    mods_forzados: [
-      { id: 'hf1', nombre: 'Vainilla', emoji: '🤍', tipo: 'sabor', costo: 0 },
-      { id: 'hf2', nombre: 'Chocolate', emoji: '🍫', tipo: 'sabor', costo: 0 },
-      { id: 'hf3', nombre: 'Fresa', emoji: '🍓', tipo: 'sabor', costo: 0 },
-      { id: 'hf4', nombre: 'Pistacchio', emoji: '🟢', tipo: 'sabor', costo: 0.5 },
-    ],
-    mods_opcionales: [
-      { id: 'ho1', nombre: 'Salsa chocolate', emoji: '🍫', tipo: 'extra', costo: 0.5 },
-      { id: 'ho2', nombre: 'Salsa caramelo', emoji: '🍯', tipo: 'extra', costo: 0.5 },
-      { id: 'ho3', nombre: 'Fresas encima', emoji: '🍓', tipo: 'extra', costo: 1 },
-    ]
-  },
-]
+type AuthAction =
+  | 'anularPlato' | 'anularOrden' | 'descuento' | 'abrirCredito'
+  | 'registrarAbono' | 'cobrar' | 'enviarCocina' | 'corteZ' | 'corteX'
+  | 'actualizarTasa'
 
-const DEMO_USERS = [
-  { pin: '1234', nombre: 'Admin Principal', nivel: 1, rol: 'admin', color: '#ff7c20' },
-  { pin: '5678', nombre: 'Cajero Demo', nivel: 2, rol: 'cajero', color: '#38b6ff' },
-  { pin: '9012', nombre: 'Mesero Demo', nivel: 3, rol: 'mesero', color: '#2ee87a' },
-  { pin: '3456', nombre: 'Supervisor', nivel: 4, rol: 'supervisor', color: '#a855f7' },
-]
+const AUTH_NIVEL_MIN: Record<AuthAction, number> = {
+  anularPlato: 3,
+  anularOrden: 3,
+  descuento: 3,
+  abrirCredito: 3,
+  corteZ: 3,
+  actualizarTasa: 3,
+  registrarAbono: 4,
+  cobrar: 4,
+  corteX: 4,
+  enviarCocina: 5,
+}
+
+const MESAS_POR_PAGINA = 12
+const BILLETES_USD = [100, 50, 20, 10, 5, 1]
+const BILLETES_BS = [200, 100, 50, 20, 10, 5, 2, 1]
+const SISTEMA_FPAGO_DEMO: Record<string, number> = {
+  'efectivo-usd': 245.50, 'efectivo-bs': 180.00, 'tarjeta': 420.00,
+  'zelle': 310.00, 'pago-movil': 95.00, 'divisa': 180.00,
+}
+
+function formatElapsed(start?: Date): string | null {
+  if (!start) return null
+  const ms = Date.now() - start.getTime()
+  const m = Math.floor(ms / 60000)
+  if (m < 1) return '<1m'
+  if (m < 60) return `${m}m`
+  const h = Math.floor(m / 60)
+  return `${h}h ${m % 60}m`
+}
 
 const AMBIENTES = [
   { id: 'salon', nombre: 'Salón', emoji: '🏛️' },
@@ -274,9 +98,12 @@ const FORMAS_PAGO = [
   { id: 'credito', label: 'Crédito', icon: '📋' },
 ]
 
+  // Se cargan dinámicamente de metodos_pago
+
+
 type TableStatus = 'libre' | 'ocupada' | 'cuenta' | 'reservada' | 'deuda'
-type View = 'login' | 'destino' | 'mesas' | 'comanda' | 'admin'
-type MenuStep = 'cats' | 'subgrupo' | 'prods' | 'variants' | 'mods-forced' | 'mods-optional' | 'qty'
+type View = 'login' | 'destino' | 'mesas' | 'comanda'
+type MenuStep = 'cats' | 'subgrupo' | 'prods' | 'mods'
 
 interface Table {
   id: string
@@ -286,9 +113,10 @@ interface Table {
   capacidad: number
   estado: TableStatus
   pedido?: OrderItem[]
-  cliente?: string
+  cliente?: string | { id: string; nombre: string; tel?: string }
   monto?: number
   opened?: Date
+  subcuentas?: Array<{ id: string; monto: number; pagada?: boolean }>
 }
 
 interface OrderItem {
@@ -312,23 +140,67 @@ export default function POSRestaurant({ license }: { license: License }) {
   const [currentAmbiente, setCurrentAmbiente] = useState('salon')
   const [selectedTable, setSelectedTable] = useState<Table | null>(null)
   const [tables, setTables] = useState<Table[]>([])
+  
+  const [items, setItems] = useState<MenuItem[]>([])
+  const [categories, setCategories] = useState<MenuCategory[]>([])
+  const [subGrupos, setSubGrupos] = useState<Subgrupo[]>([])
+  const [modifiers, setModifiers] = useState<MenuModifier[]>([])
+  const [metodosPago, setMetodosPago] = useState<MetodoPago[]>([])
+  const [loading, setLoading] = useState(true)
+
   const [currentCat, setCurrentCat] = useState<string>('')
   const [currentSubgrupo, setCurrentSubgrupo] = useState<Subgrupo | null>(null)
   const [menuStep, setMenuStep] = useState<MenuStep>('cats')
-  const [selectedProduct, setSelectedProduct] = useState<MenuItemFull | null>(null)
-  const [selectedVariant, setSelectedVariant] = useState<MenuVariant | null>(null)
+  const [selectedProduct, setSelectedProduct] = useState<MenuItem | null>(null)
   const [modsForced, setModsForced] = useState<MenuModifier[]>([])
   const [modsOptional, setModsOptional] = useState<MenuModifier[]>([])
-  const [qty, setQty] = useState(1)
+  
+  const MOD = (id: string): MenuModifier | null => modifiers.find(m => m.id === id) || null
+  const MODS = (ids: string[]): MenuModifier[] => ids.map(MOD).filter((m): m is MenuModifier => m !== null)
+
   const [note, setNote] = useState('')
   const [showCobrar, setShowCobrar] = useState(false)
   const [selectedPayment, setSelectedPayment] = useState('efectivo')
+  const [cobroPagos, setCobroPagos] = useState<Array<{ formaId: string; nombre: string; emoji: string; montoUSD: number; montoDisplay: string }>>([])
+  const [cobroTipPct, setCobroTipPct] = useState(0)
+  const [pagoPopup, setPagoPopup] = useState<{ fpagoId: string; esBs: boolean } | null>(null)
+  const [pagoInput, setPagoInput] = useState('')
   const [pin, setPin] = useState('')
-  const [currentUser, setCurrentUser] = useState<typeof DEMO_USERS[0] | null>(null)
+  const [currentUser, setCurrentUser] = useState<ZytekUser | null>(null)
   const [showAuthOverlay, setShowAuthOverlay] = useState(false)
   const [authCallback, setAuthCallback] = useState<(() => void) | null>(null)
-  const [tasaBCV, setTasaBCV] = useState(36.50)
-  const [adminView, setAdminView] = useState<'menu' | 'reportes' | 'creditos' | 'usuarios' | 'config'>('menu')
+  const [authMinNivel, setAuthMinNivel] = useState(2)
+  const [authActionLabel, setAuthActionLabel] = useState<string>('')
+  const [authError, setAuthError] = useState('')
+  const [currentPais, setCurrentPais] = useState<PaisId>('ve')
+  const [tasaBCV, setTasaBCV] = useState<number>(PAIS_CONFIG.ve.tasaDefault)
+  const [showTasaModal, setShowTasaModal] = useState(false)
+  const [tasaInput, setTasaInput] = useState('')
+  const paisCfg = PAIS_CONFIG[currentPais]
+
+  useEffect(() => {
+    const p = readPaisLocal()
+    setCurrentPais(p)
+    const t = readTasaLocal()
+    setTasaBCV(t ?? PAIS_CONFIG[p].tasaDefault)
+    const onPais = (e: Event) => {
+      const id = (e as CustomEvent<PaisId>).detail
+      setCurrentPais(id)
+      const currentT = readTasaLocal()
+      if (currentT == null) setTasaBCV(PAIS_CONFIG[id].tasaDefault)
+    }
+    const onTasa = (e: Event) => setTasaBCV((e as CustomEvent<number>).detail)
+    window.addEventListener('zk:pais-change', onPais)
+    window.addEventListener('zk:tasa-change', onTasa)
+    return () => {
+      window.removeEventListener('zk:pais-change', onPais)
+      window.removeEventListener('zk:tasa-change', onTasa)
+    }
+  }, [])
+  const swipeRef = useRef<{ x: number; y: number } | null>(null)
+  const [clock, setClock] = useState<{ date: string; time: string }>({ date: '--/--/----', time: '--:--' })
+  const [tick, setTick] = useState(0)
+  const [mesaPagina, setMesaPagina] = useState(0)
   const [showCorteX, setShowCorteX] = useState(false)
   const [showCorteZ, setShowCorteZ] = useState(false)
   const [showFuncionesMesa, setShowFuncionesMesa] = useState(false)
@@ -336,27 +208,106 @@ export default function POSRestaurant({ license }: { license: License }) {
   const [showDividir, setShowDividir] = useState(false)
   const [showNotaConsumo, setShowNotaConsumo] = useState(false)
   const [showFunciones, setShowFunciones] = useState(false)
+  const [showDescuento, setShowDescuento] = useState(false)
+  const [descuentoPct, setDescuentoPct] = useState(0)
+  const [clientes, setClientes] = useState<Array<{ id: string; nombre: string; tel: string; email?: string; notas?: string }>>([
+    { id: 'c1', nombre: 'Juan Pérez', tel: '+58 414 123 4567', notas: 'VIP' },
+    { id: 'c2', nombre: 'María García', tel: '+58 412 987 6543', email: 'mg@mail.com' },
+    { id: 'c3', nombre: 'Carlos Ruiz', tel: '+1 305 555 0123' },
+  ])
+  const [clienteSearch, setClienteSearch] = useState('')
+  const [nuevoCli, setNuevoCli] = useState({ nombre: '', tel: '', email: '', notas: '' })
+  const [opMode, setOpMode] = useState<null | 'cambio' | 'fusionar'>(null)
+  const [opSelecciones, setOpSelecciones] = useState<string[]>([])
+  const [divModo, setDivModo] = useState<'monto' | 'items'>('monto')
+  const [divPaso, setDivPaso] = useState<'modo' | 'config'>('modo')
+  const [divCuentas, setDivCuentas] = useState<Array<{ monto: number }>>([])
+  const [cortexBilletesUSD, setCortexBilletesUSD] = useState<Record<number, number>>({})
+  const [cortexBilletesBs, setCortexBilletesBs] = useState<Record<number, number>>({})
+  const [cortexSueltoUSD, setCortexSueltoUSD] = useState(0)
+  const [cortexSueltoBs, setCortexSueltoBs] = useState(0)
+  const [cortexFondo, setCortexFondo] = useState(0)
+  const [cortexObs, setCortexObs] = useState('')
+  const [cortexFpagoContado, setCortexFpagoContado] = useState<Record<string, number>>({})
+  const [cortezEgresos, setCortezEgresos] = useState<Array<{ concepto: string; monto: number }>>([])
+  const [cortezObs, setCortezObs] = useState('')
+  const [showCortezConfirm, setShowCortezConfirm] = useState(false)
+  const [cortezConfirmInput, setCortezConfirmInput] = useState('')
+  const [cortezNumero, setCortezNumero] = useState(1)
+  const [cuentasBanco, setCuentasBanco] = useState<Array<{ id: string; banco: string; moneda: 'usd' | 'bs'; numero: string; titular: string }>>([
+    { id: 'cb1', banco: 'Banesco', moneda: 'bs', numero: '0134-0000-00-0000000000', titular: 'Mi Restaurante C.A.' },
+    { id: 'cb2', banco: 'BDV', moneda: 'bs', numero: '0102-0000-00-0000000000', titular: 'Mi Restaurante C.A.' },
+    { id: 'cb3', banco: 'Zelle', moneda: 'usd', numero: 'pagos@negocio.com', titular: 'Daniel F.' },
+  ])
+  const [showCuentas, setShowCuentas] = useState(false)
+  const [editCuenta, setEditCuenta] = useState<{ id: string; banco: string; moneda: 'usd' | 'bs'; numero: string; titular: string } | null>(null)
+  const [showEditPin, setShowEditPin] = useState(false)
+  const [pinNew, setPinNew] = useState('')
+  const [pinConfirm, setPinConfirm] = useState('')
+  const [pinError, setPinError] = useState('')
 
-  const [items] = useState<MenuItemFull[]>(DEMO_MENU)
-  const [categories] = useState<MenuCategory[]>(CATEGORIAS)
-  const loading = false
+  useEffect(() => {
+    loadPOSData()
+  }, [license.tenantId])
+
+  const loadPOSData = async () => {
+    setLoading(true)
+    try {
+      const { data: cats } = await supabase.from('menu_categorias').select('*').eq('tenant_id', license.tenantId).order('orden')
+      if (cats) setCategories(cats)
+      const { data: sgs } = await supabase.from('menu_subgrupos').select('*').eq('tenant_id', license.tenantId).order('orden')
+      if (sgs) setSubGrupos(sgs)
+      const { data: modsData } = await supabase.from('modificadores').select('*, mod_grupos(tipo)').eq('tenant_id', license.tenantId)
+      if (modsData) {
+        setModifiers(modsData.map((m: any) => ({
+          id: m.id, nombre: m.nombre, emoji: m.emoji || '', precio: parseFloat(m.precio) || 0,
+          tipo: m.mod_grupos?.tipo || 'extra'
+        })))
+      }
+      const { data: itemsData } = await supabase.from('menu_items').select('*').eq('tenant_id', license.tenantId).eq('activo', true)
+      if (itemsData) setItems(itemsData)
+      const { data: mpData } = await supabase.from('metodos_pago').select('*').eq('tenant_id', license.tenantId).eq('activo', true).order('orden')
+      if (mpData) setMetodosPago(mpData)
+    } catch (e) {
+      console.error("Error loading POS data", e)
+    } finally {
+      setLoading(false)
+    }
+  }
+
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
   }, [theme])
 
   useEffect(() => {
+    const update = () => {
+      const now = new Date()
+      setClock({
+        date: now.toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+        time: now.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' }),
+      })
+      setTick(t => t + 1)
+    }
+    update()
+    const iv = setInterval(update, 30000)
+    return () => clearInterval(iv)
+  }, [])
+
+  useEffect(() => {
     const mockTables: Table[] = []
-    const counts: Record<string, number> = { salon: 8, vip: 4, terraza: 6, privado: 2, barra: 5 }
+    const counts: Record<string, number> = { salon: 30, vip: 10, terraza: 20, privado: 8, barra: 12 }
+    const prefix: Record<string, string> = { salon: 'M', vip: 'V', terraza: 'T', privado: 'P', barra: 'B' }
     let num = 1
     Object.entries(counts).forEach(([amb, count]) => {
       for (let i = 0; i < count; i++) {
         const estados: TableStatus[] = ['libre', 'libre', 'libre', 'ocupada', 'cuenta']
         const estado = estados[Math.floor(Math.random() * estados.length)]
+        const localNum = i + 1
         mockTables.push({
-          id: `M${num}`,
+          id: `${prefix[amb]}${localNum}`,
           numero: num,
-          nombre: `Mesa ${num}`,
+          nombre: amb === 'barra' ? `Taburete ${localNum}` : `Mesa ${localNum}`,
           ambiente: amb,
           capacidad: 4,
           estado,
@@ -365,6 +316,9 @@ export default function POSRestaurant({ license }: { license: License }) {
             { id: '2', uid: '2_demo', nombre: 'Croissant', precio: 2.50, cantidad: 1, enviado: true },
           ] : undefined,
           monto: estado === 'cuenta' ? 9.50 : undefined,
+          opened: estado === 'ocupada' || estado === 'cuenta'
+            ? new Date(Date.now() - Math.floor(Math.random() * 90 * 60 * 1000))
+            : undefined,
         })
         num++
       }
@@ -424,27 +378,73 @@ export default function POSRestaurant({ license }: { license: License }) {
   const filteredTables = tables.filter(t => t.ambiente === currentAmbiente)
   const activeTables = tables.filter(t => t.estado === 'ocupada').length
   
-  const filteredItems = currentCat 
-    ? items.filter(i => i.cat === currentCat && i.activo && !i.agotado)
+  const filteredItems = currentCat
+    ? items.filter(i => {
+        if (!i.activo || i.agotado) return false
+        if (i.cat !== currentCat) return false
+        if (currentSubgrupo) return i.subgroup_id === currentSubgrupo.id
+        const cat = categories.find(c => c.id === currentCat)
+        return cat?.has_subgroups ? false : (!i.subgroup_id)
+      })
     : items.filter(i => i.activo && !i.agotado)
 
-  const getProductPrice = (product: MenuItemFull): number => {
-    if (selectedVariant) return selectedVariant.precio
-    if (currentSubgrupo && product.variantes) {
-      const v = product.variantes.find(v => v.id === currentSubgrupo?.id)
-      if (v) return v.precio
-    }
-    return product.precio
-  }
-
-  const getExtraCost = (): number => {
-    return [...modsOptional, ...modsForced].reduce((sum, m) => sum + m.costo, 0)
-  }
+  const subgruposCurrent = subGrupos.filter(sg => sg.categoria_id === currentCat)
+  const hasAnyMods = (p: MenuItem): boolean =>
+    !!(p.forced_modifiers?.enabled && p.forced_modifiers.modifierIds?.length) ||
+    (p.extras_modifier_ids?.length ?? 0) > 0 ||
+    (p.sin_modifier_ids?.length ?? 0) > 0
 
   const currentOrder = selectedTable?.pedido || []
   const orderTotal = currentOrder.reduce((sum, item) => sum + item.precio * item.cantidad, 0)
 
+  const ejecutarCambioMesa = (origenId: string, destinoId: string) => {
+    const origen = tables.find(t => t.id === origenId)
+    const destino = tables.find(t => t.id === destinoId)
+    if (!origen || !destino || destino.estado !== 'libre') return
+    setTables(prev => prev.map(t => {
+      if (t.id === origenId) return { ...t, estado: 'libre' as TableStatus, pedido: undefined, monto: undefined, opened: undefined, cliente: undefined }
+      if (t.id === destinoId) return { ...t, estado: origen.estado, pedido: origen.pedido, monto: origen.monto, opened: origen.opened, cliente: origen.cliente }
+      return t
+    }))
+  }
+
+  const ejecutarFusionMesas = (mesaA: string, mesaB: string) => {
+    const a = tables.find(t => t.id === mesaA)
+    const b = tables.find(t => t.id === mesaB)
+    if (!a || !b) return
+    const pedidoCombinado = [...(a.pedido || []), ...(b.pedido || [])]
+    const montoCombinado = (a.monto || 0) + (b.monto || 0)
+    setTables(prev => prev.map(t => {
+      if (t.id === mesaA) return { ...t, pedido: pedidoCombinado, monto: montoCombinado, estado: 'ocupada' as TableStatus, opened: a.opened || b.opened || new Date() }
+      if (t.id === mesaB) return { ...t, estado: 'libre' as TableStatus, pedido: undefined, monto: undefined, opened: undefined, cliente: undefined }
+      return t
+    }))
+  }
+
   const handleTableClick = (table: Table) => {
+    if (opMode) {
+      const next = [...opSelecciones, table.id]
+      if (opMode === 'cambio') {
+        if (opSelecciones.length === 0) {
+          if (table.estado === 'libre') return
+          setOpSelecciones(next)
+        } else {
+          if (table.estado !== 'libre') return
+          ejecutarCambioMesa(opSelecciones[0], table.id)
+          setOpMode(null); setOpSelecciones([])
+        }
+      } else if (opMode === 'fusionar') {
+        if (opSelecciones.length === 0) {
+          if (table.estado === 'libre') return
+          setOpSelecciones(next)
+        } else {
+          if (table.estado === 'libre' || table.id === opSelecciones[0]) return
+          ejecutarFusionMesas(opSelecciones[0], table.id)
+          setOpMode(null); setOpSelecciones([])
+        }
+      }
+      return
+    }
     let targetTable = table
     if (table.estado === 'libre') {
       targetTable = { ...table, estado: 'ocupada' as TableStatus, pedido: [], opened: new Date() }
@@ -458,11 +458,10 @@ export default function POSRestaurant({ license }: { license: License }) {
   const selectCat = (catId: string) => {
     const cat = categories.find(c => c.id === catId)
     setCurrentCat(catId)
-    if (cat?.usaSubgrupos && cat.subgrupos?.length) {
-      setCurrentSubgrupo(null)
+    setCurrentSubgrupo(null)
+    if (cat?.has_subgroups) {
       setMenuStep('subgrupo')
     } else {
-      setCurrentSubgrupo(null)
       setMenuStep('prods')
     }
   }
@@ -472,44 +471,26 @@ export default function POSRestaurant({ license }: { license: License }) {
     setMenuStep('prods')
   }
 
-  const selectProduct = (product: MenuItemFull) => {
+  const selectProduct = (product: MenuItem) => {
     setSelectedProduct(product)
-    setSelectedVariant(null)
     setModsForced([])
     setModsOptional([])
-    setQty(1)
     setNote('')
-    
-    if (product.variantes && product.variantes.length) {
-      setMenuStep('variants')
-    } else if (hasForzados(product)) {
-      setMenuStep('mods-forced')
-    } else if (product.mods_opcionales?.length) {
-      setMenuStep('mods-optional')
-    } else {
-      setMenuStep('qty')
-    }
-  }
 
-  const hasForzados = (product: MenuItemFull): boolean => {
-    return !!(product.mods_forzados?.length && product.forzarContornos !== false)
-  }
-
-  const selectVariant = (variant: MenuVariant) => {
-    setSelectedVariant(variant)
-    if (selectedProduct && hasForzados(selectedProduct)) {
-      setMenuStep('mods-forced')
-    } else if (selectedProduct?.mods_opcionales?.length) {
-      setMenuStep('mods-optional')
+    if (hasAnyMods(product)) {
+      setMenuStep('mods')
     } else {
-      setMenuStep('qty')
+      finalizeAdd(product, [], [], '')
     }
   }
 
   const toggleModForced = (mod: MenuModifier) => {
+    const cfg = selectedProduct?.forcedModifiers
+    const max = cfg?.maxSelections ?? 0
     setModsForced(prev => {
       const exists = prev.find(m => m.id === mod.id)
       if (exists) return prev.filter(m => m.id !== mod.id)
+      if (max > 0 && prev.length >= max) return prev
       return [...prev, mod]
     })
   }
@@ -522,94 +503,260 @@ export default function POSRestaurant({ license }: { license: License }) {
     })
   }
 
-  const proceedFromModsForced = () => {
-    if (selectedProduct?.mods_opcionales?.length) {
-      setMenuStep('mods-optional')
-    } else {
-      setMenuStep('qty')
+  const proceedFromMods = () => {
+    if (selectedProduct) {
+      finalizeAdd(selectedProduct, modsForced, modsOptional, note)
     }
-  }
-
-  const proceedFromModsOptional = () => {
-    setMenuStep('qty')
   }
 
   const addToOrder = (item: MenuItemFull) => {
     selectProduct(item)
   }
 
-  const confirmItem = () => {
-    if (!selectedTable || !selectedProduct) return
-    
-    const basePrice = getProductPrice(selectedProduct)
-    const extraCost = getExtraCost()
+  const finalizeAdd = (
+    product: MenuItem,
+    forced: MenuModifier[],
+    optional: MenuModifier[],
+    noteText: string,
+  ) => {
+    if (!selectedTable) return
+
+    const basePrice = product.precio
+    const extraCost = [...forced, ...optional].reduce((s, m) => s + m.precio, 0)
     const totalPrice = basePrice + extraCost
-    
-    let itemName = selectedProduct.nombre
-    if (currentSubgrupo) {
-      itemName += ` · ${currentSubgrupo.nombre}`
-    } else if (selectedVariant) {
-      itemName += ` · ${selectedVariant.nombre}`
-    }
+
+    const sg = subGrupos.find(x => x.id === product.subgroup_id) || null
+    let itemName = product.nombre
+    if (sg) itemName += ` · ${sg.nombre}`
 
     const newItem: OrderItem = {
       id: Date.now().toString(),
       uid: Date.now().toString() + '_' + Math.random().toString(36).slice(2, 6),
       nombre: itemName,
       precio: totalPrice,
-      cantidad: qty,
-      modsForced: [...modsForced],
-      modsOptional: [...modsOptional],
-      variante: currentSubgrupo?.nombre || selectedVariant?.nombre || undefined,
-      nota: note || undefined,
+      cantidad: 1,
+      modsForced: [...forced],
+      modsOptional: [...optional],
+      variante: sg?.nombre || undefined,
+      nota: noteText || undefined,
       enviado: false,
     }
 
     const updatedTable = { ...selectedTable, pedido: [...(selectedTable.pedido || []), newItem] }
     const updatedTables = tables.map(t => t.id === selectedTable.id ? updatedTable : t)
-    
+
     setTables(updatedTables)
     setSelectedTable(updatedTable)
-    
-    if (currentSubgrupo) {
-      setMenuStep('prods')
-    } else {
-      setMenuStep('cats')
-    }
+
+    setMenuStep('prods')
     setSelectedProduct(null)
-    setSelectedVariant(null)
     setModsForced([])
     setModsOptional([])
     setNote('')
   }
 
   const handlePinSubmit = () => {
-    const user = DEMO_USERS.find(u => u.pin === pin)
+    const user = DEMO_USERS.find(u => u.pin && u.pin === pin)
     if (user) {
-      setCurrentUser(user)
       setPin('')
-      setCurrentView('destino')
+      if (user.nivel === 6) {
+        if (typeof window !== 'undefined') window.open('/kds', '_blank')
+        return
+      }
+      setCurrentUser(user)
+      if (user.nivel <= 2) setCurrentView('destino')
+      else setCurrentView('mesas')
     }
   }
 
-  const handleAuthAction = (callback: () => void) => {
-    if (currentUser?.nivel === 1) {
+  const requireAuth = (action: AuthAction, callback: () => void) => {
+    const minNivel = AUTH_NIVEL_MIN[action]
+    if (currentUser && currentUser.nivel <= minNivel) {
       callback()
-    } else {
-      setAuthCallback(() => callback)
-      setShowAuthOverlay(true)
+      return
     }
+    setAuthCallback(() => callback)
+    setAuthMinNivel(minNivel)
+    setAuthActionLabel(action)
+    setAuthError('')
+    setPin('')
+    setShowAuthOverlay(true)
   }
+
+  const handleAuthAction = (callback: () => void) => requireAuth('anularOrden', callback)
 
   const confirmAuth = () => {
-    const user = DEMO_USERS.find(u => u.pin === pin)
-    if (user && user.nivel <= 2) {
+    const user = DEMO_USERS.find(u => u.pin && u.pin === pin)
+    if (user && user.nivel <= authMinNivel) {
       if (authCallback) authCallback()
       setShowAuthOverlay(false)
       setPin('')
       setAuthCallback(null)
+      setAuthError('')
+    } else {
+      setAuthError(user ? `Nivel insuficiente (requiere ≤ ${authMinNivel})` : 'PIN inválido')
+      setPin('')
     }
   }
+
+  const repetirUltimoItem = () => {
+    if (!selectedTable?.pedido?.length) return
+    const last = selectedTable.pedido[selectedTable.pedido.length - 1]
+    const clone: OrderItem = {
+      ...last,
+      id: Date.now().toString(),
+      uid: Date.now().toString() + '_' + Math.random().toString(36).slice(2, 6),
+      enviado: false,
+      cantidad: 1,
+    }
+    const updatedTable = { ...selectedTable, pedido: [...selectedTable.pedido, clone] }
+    setTables(tables.map(t => t.id === selectedTable.id ? updatedTable : t))
+    setSelectedTable(updatedTable)
+  }
+
+  const anularOrden = () => {
+    if (!selectedTable) return
+    const updatedTable = { ...selectedTable, pedido: [] }
+    setTables(tables.map(t => t.id === selectedTable.id ? updatedTable : t))
+    setSelectedTable(updatedTable)
+  }
+
+  const enviarCocinaOSalir = () => {
+    if (selectedTable?.pedido?.some(i => !i.enviado)) {
+      sendToKitchen()
+    }
+    setCurrentView('mesas')
+  }
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null
+      if (t && t.tagName === 'BUTTON' && t.getAttribute('tabindex') === '-1') {
+        try { (t as HTMLButtonElement).blur() } catch {}
+      }
+      const tag = t?.tagName
+      const isField = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+
+      const anyModal = showCobrar || showCorteX || showCorteZ || showFuncionesMesa ||
+        showCliente || showDividir || showNotaConsumo || showFunciones ||
+        showDescuento || showCuentas || showEditPin || showCortezConfirm ||
+        showTasaModal || !!pagoPopup || !!editCuenta
+
+      if (showAuthOverlay) {
+        if (e.key === 'Escape') { e.preventDefault(); setShowAuthOverlay(false); setPin(''); setAuthCallback(null); setAuthError(''); return }
+        if (isField) return
+        if (e.key >= '0' && e.key <= '9') {
+          e.preventDefault()
+          setPin(p => {
+            if (p.length >= 8) return p
+            const next = p + e.key
+            const match = DEMO_USERS.find(u => u.pin && u.pin === next)
+            if (match && match.nivel <= authMinNivel) {
+              setTimeout(() => {
+                if (authCallback) authCallback()
+                setShowAuthOverlay(false); setPin(''); setAuthCallback(null); setAuthError('')
+              }, 0)
+            }
+            return next
+          })
+          return
+        }
+        if (e.key === 'Backspace') { e.preventDefault(); setPin(p => p.slice(0, -1)); return }
+        if (e.key === 'Enter') { e.preventDefault(); confirmAuth(); return }
+        return
+      }
+
+      if (!currentUser) {
+        if (isField) return
+        if (e.key >= '0' && e.key <= '9') {
+          e.preventDefault()
+          setPin(p => {
+            if (p.length >= 8) return p
+            const next = p + e.key
+            const match = DEMO_USERS.find(u => u.pin && u.pin === next)
+            if (match) {
+              setTimeout(() => {
+                if (match.nivel === 6) { if (typeof window !== 'undefined') window.open('/kds', '_blank'); setPin('') }
+                else { setCurrentUser(match); setPin(''); setCurrentView(match.nivel <= 2 ? 'destino' : 'mesas') }
+              }, 0)
+            }
+            return next
+          })
+          return
+        }
+        if (e.key === 'Backspace') { e.preventDefault(); setPin(p => p.slice(0, -1)); return }
+        if (e.key === 'Enter') { e.preventDefault(); handlePinSubmit(); return }
+        if (e.key === 'Escape') { e.preventDefault(); setPin(''); return }
+        return
+      }
+
+      if (showCobrar) {
+        if (e.key === 'Escape') { e.preventDefault(); setShowCobrar(false); return }
+        if (isField) return
+        if (e.key === 'Enter') { e.preventDefault(); confirmarCobro(); return }
+        const m = /^F(\d{1,2})$/.exec(e.key)
+        if (m) {
+          const idx = parseInt(m[1], 10) - 1
+          const activas = metodosPago
+          if (idx >= 0 && idx < activas.length) { e.preventDefault(); seleccionarFormaPago(activas[idx]); return }
+        }
+        return
+      }
+
+      if (anyModal) {
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          if (showTasaModal) { setShowTasaModal(false); setTasaInput(''); return }
+          if (pagoPopup) { setPagoPopup(null); return }
+          if (editCuenta) { setEditCuenta(null); return }
+          if (showCortezConfirm) { setShowCortezConfirm(false); return }
+          if (showEditPin) { setShowEditPin(false); return }
+          if (showCuentas) { setShowCuentas(false); return }
+          if (showDescuento) { setShowDescuento(false); return }
+          if (showFunciones) { setShowFunciones(false); return }
+          if (showNotaConsumo) { setShowNotaConsumo(false); return }
+          if (showDividir) { setShowDividir(false); return }
+          if (showCliente) { setShowCliente(false); return }
+          if (showFuncionesMesa) { setShowFuncionesMesa(false); return }
+          if (showCorteZ) { setShowCorteZ(false); return }
+          if (showCorteX) { setShowCorteX(false); return }
+        }
+        return
+      }
+
+      if (isField) return
+
+      if (currentView === 'mesas') {
+        const totalPagLocal = Math.max(1, Math.ceil(filteredTables.length / MESAS_POR_PAGINA))
+        if (e.key === 'F3') { e.preventDefault(); setShowFunciones(true); return }
+        if (e.key === 'F4') { e.preventDefault(); setClienteSearch(''); setNuevoCli({ nombre: '', tel: '', email: '', notas: '' }); setShowCliente(true); return }
+        if (e.key === 'F5') { e.preventDefault(); setShowCorteX(true); return }
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); setMesaPagina(p => Math.min(totalPagLocal - 1, p + 1)); return }
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); setMesaPagina(p => Math.max(0, p - 1)); return }
+        if (e.key === 'Escape') { e.preventDefault(); if (window.confirm('¿Cerrar sesión?')) { setSelectedTable(null); setCurrentUser(null) } return }
+        return
+      }
+
+      if (currentView === 'comanda') {
+        if (e.key === 'F1') { e.preventDefault(); setClienteSearch(''); setNuevoCli({ nombre: '', tel: '', email: '', notas: '' }); setShowCliente(true); return }
+        if (e.key === 'F2') { e.preventDefault(); if (currentOrder.length) requireAuth('cobrar', () => { setCobroPagos([]); setCobroTipPct(0); setShowCobrar(true) }); return }
+        if (e.key === 'F5') { e.preventDefault(); repetirUltimoItem(); return }
+        if (e.key === 'F6') { e.preventDefault(); setShowNotaConsumo(true); return }
+        if (e.key === 'F7') { e.preventDefault(); requireAuth('anularOrden', anularOrden); return }
+        if (e.key === 'Escape') { e.preventDefault(); enviarCocinaOSalir(); return }
+        return
+      }
+    }
+
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    pin, currentUser, currentView, showAuthOverlay, showCobrar, showCorteX, showCorteZ,
+    showFuncionesMesa, showCliente, showDividir, showNotaConsumo, showFunciones,
+    showDescuento, showCuentas, showEditPin, showCortezConfirm, pagoPopup, editCuenta,
+    selectedTable, currentOrder, filteredTables, authCallback, authMinNivel, cobroPagos, cobroTipPct, showTasaModal,
+  ])
 
   const orderTotalBs = orderTotal * tasaBCV
 
@@ -674,7 +821,7 @@ export default function POSRestaurant({ license }: { license: License }) {
         <div style={{ fontSize: 12, color: colors.textDim, fontFamily: 'DM Mono, monospace' }}>Punto de Venta</div>
       </div>
       <div
-        onClick={() => { setCurrentView('admin') }}
+        onClick={() => { if (typeof window !== 'undefined') window.location.href = '/admin' }}
         style={{ width: 280, height: 320, borderRadius: 20, border: `3px solid ${colors.blue}`, background: colors.surface, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, transition: 'all 0.2s' }}
       >
         <div style={{ fontSize: 64 }}>⚙️</div>
@@ -690,19 +837,66 @@ export default function POSRestaurant({ license }: { license: License }) {
       <div style={{ position: 'fixed', inset: 0, zIndex: 700, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ background: colors.surface, border: `1px solid ${colors.border2}`, borderRadius: 14, padding: '24px 32px', width: '100%', maxWidth: 320, textAlign: 'center' }}>
           <div style={{ fontSize: 32, marginBottom: 12 }}>🔐</div>
-          <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 700, color: colors.text, marginBottom: 16 }}>Autenticación</div>
-          <div style={{ background: colors.surface2, border: `2px solid ${colors.orange}`, borderRadius: 10, padding: '12px 16px', marginBottom: 16 }}>
+          <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 700, color: colors.text, marginBottom: 4 }}>Autenticación</div>
+          <div style={{ fontSize: 10, fontFamily: 'DM Mono, monospace', letterSpacing: 2, color: colors.textDim, marginBottom: 14 }}>
+            {authActionLabel ? `${authActionLabel.toUpperCase()} · ` : ''}REQ. NIVEL ≤ {authMinNivel}
+          </div>
+          <div style={{ background: colors.surface2, border: `2px solid ${colors.orange}`, borderRadius: 10, padding: '12px 16px', marginBottom: 12 }}>
             <input
               type="password"
               value={pin}
               onChange={(e) => setPin(e.target.value)}
               placeholder="PIN"
+              autoFocus
               style={{ width: '100%', background: 'transparent', border: 'none', fontSize: 24, letterSpacing: 8, color: colors.text, textAlign: 'center', outline: 'none', fontFamily: 'DM Mono, monospace' }}
             />
           </div>
+          {authError && (
+            <div style={{ fontSize: 11, color: colors.red, marginBottom: 12, fontFamily: 'DM Mono, monospace' }}>{authError}</div>
+          )}
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => { setShowAuthOverlay(false); setPin('') }} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: `1px solid ${colors.border}`, background: 'transparent', color: colors.textMid, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Cancelar</button>
+            <button onClick={() => { setShowAuthOverlay(false); setPin(''); setAuthError('') }} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: `1px solid ${colors.border}`, background: 'transparent', color: colors.textMid, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Cancelar</button>
             <button onClick={confirmAuth} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: 'none', background: colors.green, color: '#000', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Confirmar</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const renderTasaModal = () => {
+    if (!showTasaModal) return null
+    const nueva = parseFloat(tasaInput) || 0
+    const confirmar = () => {
+      if (nueva <= 0) return
+      setTasaBCV(nueva)
+      writeTasaLocal(nueva)
+      setShowTasaModal(false)
+      setTasaInput('')
+    }
+    return (
+      <div
+        onClick={(e) => { if (e.target === e.currentTarget) { setShowTasaModal(false); setTasaInput('') } }}
+        style={{ position: 'fixed', inset: 0, zIndex: 650, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      >
+        <div style={{ background: colors.surface, border: `2px solid ${colors.cyan}`, borderRadius: 14, padding: '22px 26px', width: '100%', maxWidth: 360, textAlign: 'center' }}>
+          <div style={{ fontSize: 28, marginBottom: 8 }}>💱</div>
+          <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 700, color: colors.text, marginBottom: 2 }}>Actualizar {paisCfg.tasaLabel}</div>
+          <div style={{ fontSize: 10, fontFamily: 'DM Mono, monospace', letterSpacing: 2, color: colors.textDim, marginBottom: 14 }}>
+            {paisCfg.nombre} · 1 USD → {paisCfg.simbolo}
+          </div>
+          <div style={{ fontSize: 10, color: colors.textDim, marginBottom: 6 }}>Actual: <span style={{ color: colors.cyan, fontFamily: 'DM Mono, monospace' }}>{tasaBCV.toFixed(2)}</span></div>
+          <input
+            type="number"
+            step="0.01"
+            autoFocus
+            value={tasaInput}
+            onChange={(e) => setTasaInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') confirmar() }}
+            style={{ width: '100%', padding: '12px 14px', borderRadius: 10, border: `2px solid ${colors.border2}`, background: colors.surface2, color: colors.text, fontSize: 22, fontFamily: 'DM Mono, monospace', textAlign: 'center', marginBottom: 14, outline: 'none' }}
+          />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => { setShowTasaModal(false); setTasaInput('') }} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: `1px solid ${colors.border}`, background: 'transparent', color: colors.textMid, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Cancelar</button>
+            <button onClick={confirmar} disabled={nueva <= 0} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: 'none', background: nueva > 0 ? colors.green : colors.surface2, color: nueva > 0 ? '#000' : colors.textDim, fontSize: 12, fontWeight: 600, cursor: nueva > 0 ? 'pointer' : 'not-allowed' }}>Guardar</button>
           </div>
         </div>
       </div>
@@ -814,7 +1008,8 @@ export default function POSRestaurant({ license }: { license: License }) {
           {AMBIENTES.map(amb => (
             <div
               key={amb.id}
-              onClick={() => setCurrentAmbiente(amb.id)}
+              className={currentAmbiente === amb.id ? 'zk-amb-active' : ''}
+              onClick={() => { setCurrentAmbiente(amb.id); setMesaPagina(0) }}
               style={{
                 display: 'flex', alignItems: 'center', gap: 9, padding: 10, borderRadius: 8,
                 cursor: 'pointer', border: '1px solid transparent', marginBottom: 3,
@@ -862,70 +1057,253 @@ export default function POSRestaurant({ license }: { license: License }) {
             </div>
           </div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, padding: 14, overflow: 'auto', flex: 1, alignContent: 'start' }}>
-          {filteredTables.map(table => {
-            const statusStyle = getStatusColor(table.estado)
-            return (
-              <div
-                key={table.id}
-                onClick={() => handleTableClick(table)}
-                style={{
-                  borderRadius: 10, padding: '10px 8px', cursor: 'pointer',
-                  border: `2px solid ${statusStyle.border}`, textAlign: 'center',
-                  background: statusStyle.bg, width: '100%', minHeight: 100,
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                  transition: 'transform 0.15s',
-                }}
-                onMouseDown={(e) => (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'}
-                onMouseUp={(e) => (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'}
-                onMouseLeave={(e) => (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'}
-              >
-                <div style={{ fontFamily: 'Fraunces, serif', fontSize: 20, fontWeight: 900, lineHeight: 1, marginBottom: 1 }}>
-                  {table.numero}
-                </div>
-                <div style={{ fontSize: 8, fontFamily: 'DM Mono, monospace', letterSpacing: 1, textTransform: 'uppercase', color: statusStyle.text }}>
-                  {getStatusLabel(table.estado)}
-                </div>
-                {table.monto !== undefined && (
-                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 10, fontWeight: 700, marginTop: 2, color: colors.orange }}>
-                    ${table.monto.toFixed(2)}
+        {opMode && (() => {
+          const def = opMode === 'cambio'
+            ? { label: 'CAMBIO DE MESA', steps: ['ORIGEN', 'DESTINO'], colors: [colors.amber, colors.green], sep: '→' }
+            : { label: 'FUSIONAR MESAS', steps: ['MESA A', 'MESA B'], colors: [colors.blue, colors.purple], sep: '+' }
+          const hint = opSelecciones.length === 0
+            ? `TOCA LA MESA — ${def.steps[0]}`
+            : `TOCA LA MESA — ${def.steps[1]}`
+          return (
+            <div style={{ padding: '10px 16px', borderBottom: `2px solid ${colors.border}`, flexShrink: 0, background: colors.surface }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 11, fontFamily: 'DM Mono, monospace', letterSpacing: 1, marginBottom: 6, color: opSelecciones.length === 0 ? def.colors[0] : def.colors[1] }}>
+                    {def.label} · {hint}
                   </div>
-                )}
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {def.steps.map((step, i) => {
+                      const val = opSelecciones[i]
+                      const done = i < opSelecciones.length
+                      const active = i === opSelecciones.length
+                      const bc = done ? colors.greenB : active ? def.colors[i] : colors.border
+                      const bg = done ? colors.greenDim : active ? 'rgba(255,255,255,0.05)' : colors.surface2
+                      const tc = done ? colors.green : active ? def.colors[i] : colors.textDim
+                      return (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ flex: 1, padding: '6px 14px', borderRadius: 6, border: `2px solid ${bc}`, background: bg, textAlign: 'center', minWidth: 100 }}>
+                            <div style={{ fontSize: 8, fontFamily: 'DM Mono, monospace', color: colors.textDim, letterSpacing: 1 }}>{step}</div>
+                            <div style={{ fontFamily: 'Fraunces, serif', fontSize: 20, fontWeight: 900, color: tc }}>{val ? `M${tables.find(t => t.id === val)?.numero ?? '—'}` : '—'}</div>
+                          </div>
+                          {i < def.steps.length - 1 && (
+                            <div style={{ fontSize: 16, color: colors.textDim }}>{def.sep}</div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+                <button
+                  onClick={() => { setOpMode(null); setOpSelecciones([]) }}
+                  style={{ padding: '6px 14px', borderRadius: 7, border: `1px solid ${colors.border}`, background: 'transparent', color: colors.textMid, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                >✕ Cancelar</button>
               </div>
-            )
-          })}
+            </div>
+          )
+        })()}
+        <div
+          style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, padding: 14, overflow: 'auto', flex: 1, alignContent: 'start', touchAction: 'pan-y' }}
+          onTouchStart={(e) => { swipeRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY } }}
+          onTouchEnd={(e) => {
+            if (!swipeRef.current) return
+            const dx = e.changedTouches[0].clientX - swipeRef.current.x
+            const dy = e.changedTouches[0].clientY - swipeRef.current.y
+            swipeRef.current = null
+            if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy)) return
+            const totalPag = Math.max(1, Math.ceil(filteredTables.length / MESAS_POR_PAGINA))
+            if (dx < 0) setMesaPagina(p => Math.min(totalPag - 1, p + 1))
+            else setMesaPagina(p => Math.max(0, p - 1))
+          }}
+        >
+          {(() => {
+            void tick
+            const totalPag = Math.max(1, Math.ceil(filteredTables.length / MESAS_POR_PAGINA))
+            const safePag = Math.min(mesaPagina, totalPag - 1)
+            const start = safePag * MESAS_POR_PAGINA
+            const pageTables = filteredTables.slice(start, start + MESAS_POR_PAGINA)
+            return pageTables.map(table => {
+              const statusStyle = getStatusColor(table.estado)
+              const elapsed = formatElapsed(table.opened)
+              return (
+                <div
+                  key={table.id}
+                  className="zk-mesa"
+                  onClick={() => handleTableClick(table)}
+                  style={{
+                    position: 'relative',
+                    borderRadius: 10, padding: '10px 8px', cursor: 'pointer',
+                    border: `2px solid ${statusStyle.border}`, textAlign: 'center',
+                    background: statusStyle.bg, width: '100%', minHeight: 100,
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  }}
+                >
+                  {elapsed && (
+                    <div style={{ position: 'absolute', top: 5, left: 5, fontSize: 8, fontFamily: 'DM Mono, monospace', color: colors.textDim, background: 'rgba(0,0,0,0.3)', padding: '1px 4px', borderRadius: 3, lineHeight: 1.4 }}>
+                      ⏱ {elapsed}
+                    </div>
+                  )}
+                  <div style={{ position: 'absolute', top: 6, right: 6, width: 8, height: 8, borderRadius: '50%', background: statusStyle.text }} />
+                  <div style={{ fontFamily: 'Fraunces, serif', fontSize: 20, fontWeight: 900, lineHeight: 1, marginBottom: 1 }}>
+                    {table.numero}
+                  </div>
+                  <div style={{ fontSize: 8, fontFamily: 'DM Mono, monospace', letterSpacing: 1, textTransform: 'uppercase', color: statusStyle.text }}>
+                    {getStatusLabel(table.estado)}
+                  </div>
+                  {table.monto !== undefined && (
+                    <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 10, fontWeight: 700, marginTop: 2, color: colors.orange }}>
+                      ${table.monto.toFixed(2)}
+                    </div>
+                  )}
+                </div>
+              )
+            })
+          })()}
         </div>
+        {filteredTables.length > MESAS_POR_PAGINA && (() => {
+          const totalPag = Math.ceil(filteredTables.length / MESAS_POR_PAGINA)
+          const safePag = Math.min(mesaPagina, totalPag - 1)
+          const start = safePag * MESAS_POR_PAGINA
+          const end = Math.min(start + MESAS_POR_PAGINA, filteredTables.length)
+          return (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '8px 14px', borderTop: `1px solid ${colors.border}`, background: colors.surface, flexShrink: 0 }}>
+              <button
+                onClick={() => setMesaPagina(p => Math.max(0, p - 1))}
+                disabled={safePag === 0}
+                style={{ padding: '4px 10px', borderRadius: 6, border: `1px solid ${colors.border}`, background: 'transparent', color: colors.textMid, cursor: safePag === 0 ? 'not-allowed' : 'pointer', fontSize: 11, opacity: safePag === 0 ? 0.4 : 1 }}
+              >◀</button>
+              <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+                {Array.from({ length: totalPag }).map((_, i) => (
+                  <div
+                    key={i}
+                    onClick={() => setMesaPagina(i)}
+                    style={{
+                      width: i === safePag ? 20 : 8, height: 8,
+                      borderRadius: i === safePag ? 4 : '50%',
+                      background: i === safePag ? colors.orange : colors.border2,
+                      cursor: 'pointer', transition: 'all 0.15s',
+                    }}
+                  />
+                ))}
+              </div>
+              <button
+                onClick={() => setMesaPagina(p => Math.min(totalPag - 1, p + 1))}
+                disabled={safePag >= totalPag - 1}
+                style={{ padding: '4px 10px', borderRadius: 6, border: `1px solid ${colors.border}`, background: 'transparent', color: colors.textMid, cursor: safePag >= totalPag - 1 ? 'not-allowed' : 'pointer', fontSize: 11, opacity: safePag >= totalPag - 1 ? 0.4 : 1 }}
+              >▶</button>
+              <span style={{ fontSize: 10, fontFamily: 'DM Mono, monospace', color: colors.textDim, marginLeft: 4 }}>
+                {start + 1}-{end} / {filteredTables.length}
+              </span>
+            </div>
+          )
+        })()}
       </div>
 
-      <div style={{ background: '#0f1923', borderLeft: '2px solid rgba(0,0,0,0.4)', display: 'flex', flexDirection: 'column', flexShrink: 0, width: 148 }}>
-        <div style={{ background: 'linear-gradient(180deg,#1e4a8c 0%,#163a74 100%)', flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', borderBottom: '1px solid rgba(0,0,0,0.3)', borderTop: '1px solid rgba(255,255,255,0.05)', position: 'relative', overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', right: -8, top: '50%', transform: 'translateY(-48%)', fontFamily: 'DM Sans', fontWeight: 900, fontSize: 68, letterSpacing: -4, color: 'rgba(255,255,255,0.07)', pointerEvents: 'none' }}>1</div>
-          <div style={{ position: 'absolute', top: 5, left: 7, fontFamily: 'DM Sans', fontWeight: 800, fontSize: 12, color: '#fff', zIndex: 1 }}>F1</div>
-          <span style={{ fontSize: 22, lineHeight: 1, zIndex: 1 }}>🧾</span>
-          <span style={{ position: 'absolute', bottom: 5, left: 0, right: 0, fontSize: 8, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase', color: 'rgba(255,255,255,0.85)', textAlign: 'center', zIndex: 1 }}>Reportes</span>
-        </div>
-        <div style={{ background: 'linear-gradient(180deg,#cc5500 0%,#aa4000 100%)', flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', borderBottom: '1px solid rgba(0,0,0,0.3)', borderTop: '1px solid rgba(255,255,255,0.05)', position: 'relative', overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', right: -8, top: '50%', transform: 'translateY(-48%)', fontFamily: 'DM Sans', fontWeight: 900, fontSize: 68, letterSpacing: -4, color: 'rgba(255,255,255,0.07)', pointerEvents: 'none' }}>2</div>
-          <div style={{ position: 'absolute', top: 5, left: 7, fontFamily: 'DM Sans', fontWeight: 800, fontSize: 12, color: '#fff', zIndex: 1 }}>F2</div>
-          <span style={{ fontSize: 22, lineHeight: 1, zIndex: 1 }}>💳</span>
-          <span style={{ position: 'absolute', bottom: 5, left: 0, right: 0, fontSize: 8, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase', color: 'rgba(255,255,255,0.85)', textAlign: 'center', zIndex: 1 }}>Cobrar</span>
-        </div>
-        <div style={{ background: 'linear-gradient(180deg,#1a6e3a 0%,#115a2a 100%)', flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', borderBottom: '1px solid rgba(0,0,0,0.3)', borderTop: '1px solid rgba(255,255,255,0.05)', position: 'relative', overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', right: -8, top: '50%', transform: 'translateY(-48%)', fontFamily: 'DM Sans', fontWeight: 900, fontSize: 68, letterSpacing: -4, color: 'rgba(255,255,255,0.07)', pointerEvents: 'none' }}>↵</div>
-          <div style={{ position: 'absolute', top: 5, left: 7, fontFamily: 'DM Sans', fontWeight: 800, fontSize: 12, color: '#fff', zIndex: 1 }}>ESC</div>
-          <span style={{ fontSize: 22, lineHeight: 1, zIndex: 1 }}>👨‍🍳</span>
-          <span style={{ position: 'absolute', bottom: 5, left: 0, right: 0, fontSize: 8, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase', color: 'rgba(255,255,255,0.85)', textAlign: 'center', zIndex: 1 }}>Cocina</span>
-        </div>
-        <div style={{ height: 4, background: 'rgba(0,0,0,0.4)', flexShrink: 0 }} />
-        <div style={{ background: 'linear-gradient(180deg,#d41428 0%,#aa0e20 100%)', flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', borderBottom: '1px solid rgba(0,0,0,0.3)', borderTop: '1px solid rgba(255,255,255,0.05)', position: 'relative', overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', right: -8, top: '50%', transform: 'translateY(-48%)', fontFamily: 'DM Sans', fontWeight: 900, fontSize: 68, letterSpacing: -4, color: 'rgba(255,255,255,0.07)', pointerEvents: 'none' }}>7</div>
-          <div style={{ position: 'absolute', top: 5, left: 7, fontFamily: 'DM Sans', fontWeight: 800, fontSize: 12, color: '#fff', zIndex: 1 }}>F7</div>
-          <span style={{ fontSize: 22, lineHeight: 1, zIndex: 1 }}>🗑️</span>
-          <span style={{ position: 'absolute', bottom: 5, left: 0, right: 0, fontSize: 8, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase', color: 'rgba(255,255,255,0.85)', textAlign: 'center', zIndex: 1 }}>Anular</span>
-        </div>
-      </div>
+      {renderActionsCol()}
     </div>
   )
+
+  const RKEY_BG: Record<string, string> = {
+    blue:   'linear-gradient(180deg,#1e4a8c 0%,#163a74 100%)',
+    amber:  'linear-gradient(180deg,#b87a00 0%,#8a5a00 100%)',
+    green:  'linear-gradient(180deg,#1a6e3a 0%,#115a2a 100%)',
+    red:    'linear-gradient(180deg,#d41428 0%,#aa0e20 100%)',
+    orange: 'linear-gradient(180deg,#cc5500 0%,#aa4000 100%)',
+    purple: 'linear-gradient(180deg,#5b21b6 0%,#4c1d95 100%)',
+  }
+
+  const renderRKey = (
+    label: string,
+    icon: string,
+    num: string,
+    onClick: () => void,
+    color: keyof typeof RKEY_BG = 'blue',
+    bgChar?: string,
+  ) => (
+    <div
+      key={`${num}-${label}`}
+      className="zk-rkey"
+      onClick={onClick}
+      style={{
+        position: 'relative', overflow: 'hidden', flexShrink: 0,
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        cursor: 'pointer', height: 72, minHeight: 60,
+        background: RKEY_BG[color],
+        borderBottom: '1px solid rgba(0,0,0,0.3)',
+        borderTop: '1px solid rgba(255,255,255,0.05)',
+        borderRight: '1px solid rgba(0,0,0,0.3)',
+      }}
+    >
+      <div style={{ position: 'absolute', right: -8, top: '50%', transform: 'translateY(-48%)', fontFamily: 'DM Sans', fontWeight: 900, fontSize: 68, lineHeight: 1, letterSpacing: -4, color: 'rgba(255,255,255,0.07)', pointerEvents: 'none', userSelect: 'none' }}>
+        {bgChar ?? num}
+      </div>
+      <div style={{ position: 'absolute', top: 5, left: 7, fontFamily: 'DM Sans', fontWeight: 800, fontSize: 12, color: '#fff', lineHeight: 1, zIndex: 1 }}>
+        F{num}
+      </div>
+      <span style={{ fontSize: 22, lineHeight: 1, zIndex: 1, position: 'relative', top: -3, filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.4))' }}>{icon}</span>
+      <span style={{ position: 'absolute', bottom: 5, left: 0, right: 0, fontSize: 8, fontFamily: 'DM Sans', fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase', color: 'rgba(255,255,255,0.85)', textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', padding: '0 4px', zIndex: 1 }}>
+        {label}
+      </span>
+    </div>
+  )
+
+  const renderActionsCol = () => {
+    const nivel = currentUser?.nivel ?? 6
+    const items: Array<{ kind: 'key' | 'sep' | 'spacer', node?: React.ReactNode }> = []
+    let n = 1
+
+    if (nivel <= 5) {
+      items.push({ kind: 'key', node: renderRKey('Venta Directa', '🧾', String(n++), () => { /* TODO Fase 2 */ }, 'green') })
+      items.push({ kind: 'key', node: renderRKey('Cobrar Mesa', '💳', String(n++), () => { setCobroPagos([]); setCobroTipPct(0); setPagoPopup(null); setShowCobrar(true) }, 'orange') })
+      items.push({ kind: 'key', node: renderRKey('Funciones Mesas', '⚡', String(n++), () => setShowFunciones(true), 'blue') })
+      items.push({ kind: 'key', node: renderRKey('Asignar Cliente', '👤', String(n++), () => setShowCliente(true), 'blue') })
+      items.push({ kind: 'sep' })
+    }
+    if (nivel <= 4) {
+      items.push({ kind: 'key', node: renderRKey('Corte X', '📊', String(n++), () => {
+        setCortexBilletesUSD({}); setCortexBilletesBs({}); setCortexSueltoUSD(0); setCortexSueltoBs(0)
+        setCortexFondo(0); setCortexObs(''); setCortexFpagoContado({})
+        setShowCorteX(true)
+      }, 'amber') })
+    }
+    if (nivel <= 3) {
+      items.push({ kind: 'key', node: renderRKey('Corte Z', '🔒', String(n++), () => {
+        setCortezEgresos([]); setCortezObs(''); setCortezConfirmInput(''); setShowCorteZ(true)
+      }, 'red') })
+    }
+    if (nivel <= 2) {
+      items.push({ kind: 'sep' })
+      items.push({ kind: 'key', node: renderRKey('Admin', '⚙️', String(n++), () => { if (typeof window !== 'undefined') window.location.href = '/admin' }, 'purple') })
+    }
+    items.push({ kind: 'spacer' })
+
+    return (
+      <div style={{ background: '#0f1923', borderLeft: '2px solid rgba(0,0,0,0.4)', display: 'flex', flexDirection: 'column', overflowY: 'auto', flexShrink: 0, width: 148 }}>
+        {items.map((it, i) => {
+          if (it.kind === 'sep') return <div key={`sep-${i}`} style={{ height: 4, background: 'rgba(0,0,0,0.4)', flexShrink: 0 }} />
+          if (it.kind === 'spacer') return <div key={`sp-${i}`} style={{ flex: 1 }} />
+          return it.node
+        })}
+        <div
+          onClick={() => { setSelectedTable(null); setCurrentUser(null) }}
+          style={{
+            position: 'relative', overflow: 'hidden', flexShrink: 0,
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', height: 72,
+            background: RKEY_BG.red,
+            borderBottom: '1px solid rgba(0,0,0,0.3)',
+            borderTop: '1px solid rgba(255,255,255,0.05)',
+          }}
+        >
+          <div style={{ position: 'absolute', right: -8, top: '50%', transform: 'translateY(-48%)', fontFamily: 'DM Sans', fontWeight: 900, fontSize: 68, lineHeight: 1, letterSpacing: -4, color: 'rgba(255,255,255,0.07)', pointerEvents: 'none' }}>✕</div>
+          <div style={{ position: 'absolute', top: 5, left: 7, fontFamily: 'DM Sans', fontWeight: 800, fontSize: 14, color: '#fff', zIndex: 1 }}>ESC</div>
+          <span style={{ fontSize: 22, zIndex: 1, position: 'relative', top: -3 }}>✕</span>
+          <span style={{ position: 'absolute', bottom: 5, left: 0, right: 0, fontSize: 8, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase', color: 'rgba(255,255,255,0.85)', textAlign: 'center' }}>
+            Cerrar Sesión
+          </span>
+        </div>
+      </div>
+    )
+  }
 
   const renderComandaView = () => (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', flex: 1, minHeight: 0, overflow: 'hidden' }}>
@@ -951,16 +1329,10 @@ export default function POSRestaurant({ license }: { license: License }) {
             {menuStep !== 'cats' && (
               <button
                 onClick={() => {
-                  if (menuStep === 'qty') {
-                    if (selectedProduct?.mods_opcionales?.length) setMenuStep('mods-optional')
-                    else if (hasForzados(selectedProduct!)) setMenuStep('mods-forced')
-                    else if (selectedProduct?.variantes?.length) setMenuStep('variants')
-                    else setMenuStep('prods')
-                  } else if (menuStep === 'mods-optional') setMenuStep(selectedProduct?.variantes?.length ? 'variants' : 'prods')
-                  else if (menuStep === 'mods-forced') setMenuStep(selectedProduct?.variantes?.length ? 'variants' : 'prods')
-                  else if (menuStep === 'variants') setMenuStep('prods')
+                  if (menuStep === 'mods') setMenuStep('prods')
                   else if (menuStep === 'prods') {
-                    if (currentSubgrupo) setMenuStep('subgrupo')
+                    const cat = categories.find(c => c.id === currentCat)
+                    if (cat?.hasSubgroups) setMenuStep('subgrupo')
                     else setMenuStep('cats')
                   }
                   else setMenuStep('cats')
@@ -1004,7 +1376,7 @@ export default function POSRestaurant({ license }: { license: License }) {
               {categories.find(c => c.id === currentCat)?.nombre} — ELIGE UN TAMAÑO
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, padding: 10, overflow: 'auto', flex: 1, alignContent: 'start' }}>
-              {categories.find(c => c.id === currentCat)?.subgrupos?.map(sg => (
+              {subgruposCurrent.map(sg => (
                 <div
                   key={sg.id}
                   onClick={() => selectSubgrupo(sg)}
@@ -1061,358 +1433,1510 @@ export default function POSRestaurant({ license }: { license: License }) {
           </div>
         )}
 
-        {menuStep === 'variants' && selectedProduct && (
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
-            <div style={{ fontSize: 9, fontFamily: 'DM Mono, monospace', letterSpacing: 3, textTransform: 'uppercase', color: colors.textDim, padding: '8px 14px', borderBottom: `1px solid ${colors.border}`, flexShrink: 0 }}>
-              ELIGE UNA OPCIÓN — {selectedProduct.nombre}
+        {menuStep === 'mods' && selectedProduct && (() => {
+          const p = selectedProduct
+          const fcfg = p.forced_modifiers
+          const forcedList = fcfg?.enabled ? MODS(fcfg.modifierIds) : []
+          const extrasList = MODS(p.extras_modifier_ids || [])
+          const sinList = MODS(p.sin_modifier_ids || [])
+          const max = fcfg?.maxSelections ?? 0
+          const modCard = (mod: MenuModifier, isSelected: boolean, onToggle: () => void, flavor: 'forced' | 'extra' | 'sin') => (
+            <div
+              key={mod.id}
+              onClick={onToggle}
+              style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3,
+                padding: 8, borderRadius: 9, cursor: 'pointer',
+                background: isSelected ? (flavor === 'sin' ? colors.redDim : colors.greenDim) : colors.surface2,
+                border: `2px solid ${isSelected ? (flavor === 'sin' ? colors.redB : colors.greenB) : colors.border}`,
+                textAlign: 'center', height: 80, transition: 'all 0.13s',
+              }}
+            >
+              <span style={{ fontSize: 18, lineHeight: 1 }}>{mod.emoji}</span>
+              <span style={{ fontSize: 10, fontWeight: 700, color: colors.text, lineHeight: 1.2 }}>{mod.nombre}</span>
+              {mod.precio > 0 && (
+                <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 10, color: colors.amber }}>+${mod.precio.toFixed(2)}</span>
+              )}
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, padding: 10, overflow: 'auto', flex: 1, alignContent: 'start' }}>
-              {selectedProduct.variantes?.map(v => (
-                <div
-                  key={v.id}
-                  onClick={() => selectVariant(v)}
-                  style={{
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
-                    padding: 10, borderRadius: 10, cursor: 'pointer', background: colors.surface2,
-                    border: `2px solid ${selectedVariant?.id === v.id ? colors.orange : colors.border}`, textAlign: 'center', height: 90,
-                    transition: 'all 0.13s',
-                  }}
-                >
-                  <span style={{ fontSize: 24, lineHeight: 1 }}>{v.emoji}</span>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: colors.text, lineHeight: 1.2 }}>{v.nombre}</span>
-                  <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 11, color: colors.orange, fontWeight: 700 }}>
-                    ${v.precio.toFixed(2)}
-                  </span>
-                </div>
-              ))}
+          )
+          const sectionHeader = (title: string, sub?: string, color = colors.textDim) => (
+            <div style={{ fontSize: 9, fontFamily: 'DM Mono, monospace', letterSpacing: 3, textTransform: 'uppercase', color, padding: '8px 14px 4px 14px', flexShrink: 0 }}>
+              {title} {sub && <span style={{ color: colors.textDim, fontWeight: 400 }}>{sub}</span>}
             </div>
-          </div>
-        )}
-
-        {menuStep === 'mods-forced' && selectedProduct && (
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
-            <div style={{ fontSize: 9, fontFamily: 'DM Mono, monospace', letterSpacing: 3, textTransform: 'uppercase', color: colors.amber, padding: '8px 14px', borderBottom: `1px solid ${colors.border}`, flexShrink: 0 }}>
-              ⚡ CONTORNOS / OBLIGATORIO — {selectedProduct.nombre}
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, padding: 10, overflow: 'auto', flex: 1, alignContent: 'start' }}>
-              {selectedProduct.mods_forzados?.map(mod => {
-                const isSelected = modsForced.some(m => m.id === mod.id)
-                return (
-                  <div
-                    key={mod.id}
-                    onClick={() => toggleModForced(mod)}
-                    style={{
-                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3,
-                      padding: 8, borderRadius: 9, cursor: 'pointer', background: isSelected ? colors.greenDim : colors.surface2,
-                      border: `2px solid ${isSelected ? colors.greenB : colors.border}`, textAlign: 'center', height: 80,
-                      transition: 'all 0.13s',
-                    }}
-                  >
-                    <span style={{ fontSize: 18, lineHeight: 1 }}>{mod.emoji}</span>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: colors.text, lineHeight: 1.2 }}>{mod.nombre}</span>
-                    {mod.costo > 0 && (
-                      <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 10, color: colors.amber }}>+${mod.costo.toFixed(2)}</span>
+          )
+          return (
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
+              <div style={{ fontSize: 9, fontFamily: 'DM Mono, monospace', letterSpacing: 3, textTransform: 'uppercase', color: colors.textDim, padding: '8px 14px', borderBottom: `1px solid ${colors.border}`, flexShrink: 0 }}>
+                {p.nombre} — MODIFICADORES
+              </div>
+              <div style={{ flex: 1, overflow: 'auto' }}>
+                {forcedList.length > 0 && (
+                  <>
+                    {sectionHeader(
+                      fcfg?.label || 'Contornos',
+                      max > 0 ? `— elige hasta ${max} (${modsForced.length}/${max})` : '— elige los que quieras',
+                      colors.amber,
                     )}
-                    <span style={{ fontSize: 8, fontFamily: 'DM Mono, monospace', color: colors.textDim, textTransform: 'uppercase' }}>
-                      {mod.tipo === 'sin' ? '❌ quitar' : mod.tipo === 'extra' ? '➕ extra' : mod.tipo}
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
-            <div style={{ display: 'flex', gap: 8, padding: '10px 14px', borderTop: `1px solid ${colors.border}`, flexShrink: 0, flexWrap: 'wrap' }}>
-              <button
-                onClick={proceedFromModsForced}
-                style={{ padding: '6px 14px', borderRadius: 7, border: 'none', background: colors.orange, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', marginLeft: 'auto' }}
-              >
-                Listo →
-              </button>
-            </div>
-          </div>
-        )}
-
-        {menuStep === 'mods-optional' && selectedProduct && (
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
-            <div style={{ fontSize: 9, fontFamily: 'DM Mono, monospace', letterSpacing: 3, textTransform: 'uppercase', color: colors.textDim, padding: '8px 14px', borderBottom: `1px solid ${colors.border}`, flexShrink: 0 }}>
-              EXTRAS / MODIFICADORES — {selectedProduct.nombre} <span style={{ fontSize: 9, color: colors.textDim, fontWeight: 400 }}>Opcional</span>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, padding: 10, overflow: 'auto', flex: 1, alignContent: 'start' }}>
-              {selectedProduct.mods_opcionales?.map(mod => {
-                const isSelected = modsOptional.some(m => m.id === mod.id)
-                return (
-                  <div
-                    key={mod.id}
-                    onClick={() => toggleModOptional(mod)}
-                    style={{
-                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3,
-                      padding: 8, borderRadius: 9, cursor: 'pointer', background: isSelected ? (mod.tipo === 'sin' ? colors.redDim : colors.greenDim) : colors.surface2,
-                      border: `2px solid ${isSelected ? (mod.tipo === 'sin' ? colors.redB : colors.greenB) : colors.border}`, textAlign: 'center', height: 80,
-                      transition: 'all 0.13s',
-                    }}
-                  >
-                    <span style={{ fontSize: 18, lineHeight: 1 }}>{mod.emoji}</span>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: colors.text, lineHeight: 1.2 }}>{mod.nombre}</span>
-                    {mod.costo > 0 && (
-                      <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 10, color: colors.amber }}>+${mod.costo.toFixed(2)}</span>
-                    )}
-                    <span style={{ fontSize: 8, fontFamily: 'DM Mono, monospace', color: colors.textDim, textTransform: 'uppercase' }}>
-                      {mod.tipo === 'sin' ? '❌ quitar' : mod.tipo === 'extra' ? '➕ extra' : mod.tipo}
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
-            <div style={{ display: 'flex', gap: 8, padding: '10px 14px', borderTop: `1px solid ${colors.border}`, flexShrink: 0, flexWrap: 'wrap' }}>
-              <button
-                onClick={proceedFromModsOptional}
-                style={{ padding: '6px 14px', borderRadius: 7, border: 'none', background: colors.orange, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', marginLeft: 'auto' }}
-              >
-                Listo →
-              </button>
-            </div>
-          </div>
-        )}
-
-        {menuStep === 'qty' && selectedProduct && (
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
-            <div style={{ fontSize: 9, fontFamily: 'DM Mono, monospace', letterSpacing: 3, textTransform: 'uppercase', color: colors.textDim, padding: '8px 14px', borderBottom: `1px solid ${colors.border}`, flexShrink: 0 }}>
-              CANTIDAD
-            </div>
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 20 }}>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 40, lineHeight: 1, marginBottom: 6 }}>{selectedProduct.emoji || '🍽️'}</div>
-                <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 700, color: colors.text }}>{selectedProduct.nombre}</div>
-                {selectedVariant && (
-                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 12, color: colors.textMid, marginTop: 2 }}>{selectedVariant.nombre}</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, padding: '0 10px 10px 10px' }}>
+                      {forcedList.map(mod => modCard(
+                        mod,
+                        modsForced.some(m => m.id === mod.id),
+                        () => toggleModForced(mod),
+                        'forced',
+                      ))}
+                    </div>
+                  </>
                 )}
-                <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 13, color: colors.orange, marginTop: 2 }}>
-                  ${(getProductPrice(selectedProduct) + getExtraCost()).toFixed(2)}
-                </div>
+                {extrasList.length > 0 && (
+                  <>
+                    {sectionHeader('Extras', '— opcional')}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, padding: '0 10px 10px 10px' }}>
+                      {extrasList.map(mod => modCard(
+                        mod,
+                        modsOptional.some(m => m.id === mod.id),
+                        () => toggleModOptional(mod),
+                        'extra',
+                      ))}
+                    </div>
+                  </>
+                )}
+                {sinList.length > 0 && (
+                  <>
+                    {sectionHeader('Sin…', '— opcional')}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, padding: '0 10px 10px 10px' }}>
+                      {sinList.map(mod => modCard(
+                        mod,
+                        modsOptional.some(m => m.id === mod.id),
+                        () => toggleModOptional(mod),
+                        'sin',
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                <button
-                  onClick={() => setQty(Math.max(1, qty - 1))}
-                  style={{ width: 52, height: 52, borderRadius: 12, border: `2px solid ${colors.border2}`, background: colors.surface2, color: colors.text, fontSize: 28, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}
-                >
-                  −
-                </button>
-                <div style={{ fontFamily: 'Fraunces, serif', fontSize: 52, fontWeight: 900, color: colors.orange, minWidth: 70, textAlign: 'center', lineHeight: 1 }}>{qty}</div>
-                <button
-                  onClick={() => setQty(qty + 1)}
-                  style={{ width: 52, height: 52, borderRadius: 12, border: `2px solid ${colors.border2}`, background: colors.surface2, color: colors.text, fontSize: 28, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}
-                >
-                  +
-                </button>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6, width: '100%', maxWidth: 320 }}>
-                {[1, 2, 3, 4, 5, 6, 8, 10, 12, 15].map(n => (
-                  <button
-                    key={n}
-                    onClick={() => setQty(n)}
-                    style={{ padding: '10px 4px', borderRadius: 8, border: `2px solid ${colors.border}`, background: colors.surface2, color: colors.text, fontSize: 14, fontWeight: 700, fontFamily: 'DM Mono, monospace', cursor: 'pointer' }}
-                  >
-                    {n}
-                  </button>
-                ))}
-              </div>
-              <div style={{ width: '100%', maxWidth: 320 }}>
+              <div style={{ display: 'flex', gap: 8, padding: '10px 14px', borderTop: `1px solid ${colors.border}`, flexShrink: 0, flexWrap: 'wrap', alignItems: 'center' }}>
                 <input
                   type="text"
                   placeholder="📝 Nota para cocina (opcional)..."
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: `1px solid ${colors.border}`, background: colors.surface2, color: colors.text, fontSize: 12, outline: 'none', fontFamily: 'DM Sans, sans-serif' }}
+                  style={{ flex: 1, minWidth: 180, padding: '8px 10px', borderRadius: 7, border: `1px solid ${colors.border}`, background: colors.surface2, color: colors.text, fontSize: 12, outline: 'none', fontFamily: 'DM Sans, sans-serif' }}
                 />
+                <button
+                  onClick={proceedFromMods}
+                  style={{ padding: '6px 14px', borderRadius: 7, border: 'none', background: colors.green, color: '#000', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                >
+                  ✅ Agregar · ${(p.precio + [...modsForced, ...modsOptional].reduce((s, m) => s + m.precio, 0)).toFixed(2)}
+                </button>
               </div>
             </div>
-            <div style={{ display: 'flex', gap: 8, padding: '10px 14px', borderTop: `1px solid ${colors.border}`, flexShrink: 0, flexWrap: 'wrap' }}>
-              <button onClick={() => setMenuStep(selectedProduct?.mods_opcionales?.length ? 'mods-optional' : 'prods')} style={{ padding: '6px 14px', borderRadius: 7, border: 'none', background: colors.surface2, color: colors.textMid, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                ← Atrás
-              </button>
-              <button onClick={confirmItem} style={{ padding: '6px 14px', borderRadius: 7, border: 'none', background: colors.green, color: '#000', fontSize: 12, fontWeight: 600, cursor: 'pointer', marginLeft: 'auto' }}>
-                ✅ Agregar (×{qty})
+          )
+        })()}
+
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', background: colors.bg, borderLeft: `1px solid ${colors.border}` }}>
+        <div style={{ padding: '10px 14px', borderBottom: `1px solid ${colors.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, background: colors.surface }}>
+          <div>
+            <div style={{ fontFamily: 'Fraunces, serif', fontSize: 14, fontWeight: 700, color: colors.text }}>
+              Pedido {selectedTable ? `· Mesa ${selectedTable.numero}` : ''}
+            </div>
+            <div style={{ fontSize: 9, fontFamily: 'DM Mono, monospace', letterSpacing: 2, color: colors.textDim, marginTop: 2 }}>
+              {currentOrder.length} ÍTEMS
+            </div>
+          </div>
+          {selectedTable?.opened && (
+            <div style={{ fontSize: 10, fontFamily: 'DM Mono, monospace', color: colors.textDim }}>
+              ⏱ {formatElapsed(selectedTable.opened) || '—'}
+            </div>
+          )}
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: '6px 8px' }}>
+          {currentOrder.length === 0 ? (
+            <div style={{ color: colors.textDim, textAlign: 'center', padding: 30, fontSize: 12 }}>
+              Sin ítems.<br />Selecciona un plato para agregarlo.
+            </div>
+          ) : currentOrder.map(item => (
+            <div key={item.uid} style={{ padding: '8px 10px', marginBottom: 4, borderRadius: 8, background: item.enviado ? colors.surface : colors.surface2, border: `1px solid ${item.enviado ? colors.greenB : colors.border}` }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                <span style={{ fontFamily: 'Fraunces, serif', fontSize: 14, fontWeight: 700, color: colors.orange, minWidth: 26 }}>{item.cantidad}×</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, color: colors.text, fontWeight: 600, lineHeight: 1.25 }}>{item.nombre}</div>
+                  {(item.modsForced?.length || item.modsOptional?.length) ? (
+                    <div style={{ fontSize: 10, color: colors.textMid, marginTop: 2, lineHeight: 1.3 }}>
+                      {[...(item.modsForced || []), ...(item.modsOptional || [])].map(m => `${m.tipo === 'sin' ? '❌' : '➕'} ${m.nombre}`).join(' · ')}
+                    </div>
+                  ) : null}
+                  {item.nota && (
+                    <div style={{ fontSize: 10, color: colors.amber, marginTop: 2, fontStyle: 'italic' }}>📝 {item.nota}</div>
+                  )}
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 12, fontWeight: 700, color: colors.text }}>${(item.precio * item.cantidad).toFixed(2)}</div>
+                  {item.enviado && <div style={{ fontSize: 8, fontFamily: 'DM Mono, monospace', color: colors.green, marginTop: 2 }}>✓ ENVIADO</div>}
+                </div>
+              </div>
+              {!item.enviado && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6, justifyContent: 'flex-end' }}>
+                  <button onClick={() => updateItemQty(item.uid, -1)} style={{ width: 24, height: 24, borderRadius: 5, border: `1px solid ${colors.border2}`, background: colors.surface, color: colors.text, cursor: 'pointer', fontSize: 14, lineHeight: 1 }}>−</button>
+                  <button onClick={() => updateItemQty(item.uid, 1)} style={{ width: 24, height: 24, borderRadius: 5, border: `1px solid ${colors.border2}`, background: colors.surface, color: colors.text, cursor: 'pointer', fontSize: 14, lineHeight: 1 }}>+</button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div style={{ padding: '10px 14px', borderTop: `1px solid ${colors.border}`, background: colors.surface, flexShrink: 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+            <span style={{ fontSize: 10, fontFamily: 'DM Mono, monospace', letterSpacing: 2, color: colors.textDim }}>SUBTOTAL</span>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontFamily: 'Fraunces, serif', fontSize: 18, fontWeight: 700, color: colors.orange }}>${orderTotal.toFixed(2)}</div>
+              <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 10, color: colors.textDim }}>Bs {(orderTotal * tasaBCV).toLocaleString('es-VE', { maximumFractionDigits: 2 })}</div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button
+              onClick={sendToKitchen}
+              disabled={!currentOrder.some(i => !i.enviado)}
+              style={{ flex: 1, padding: '10px 8px', borderRadius: 7, border: 'none', background: currentOrder.some(i => !i.enviado) ? colors.amber : colors.surface2, color: currentOrder.some(i => !i.enviado) ? '#000' : colors.textDim, fontSize: 11, fontWeight: 700, cursor: currentOrder.some(i => !i.enviado) ? 'pointer' : 'not-allowed' }}
+            >
+              👨‍🍳 Enviar
+            </button>
+            <button
+              onClick={() => { setCobroPagos([]); setCobroTipPct(0); setShowCobrar(true) }}
+              disabled={!currentOrder.length}
+              style={{ flex: 1, padding: '10px 8px', borderRadius: 7, border: 'none', background: currentOrder.length ? colors.green : colors.surface2, color: currentOrder.length ? '#000' : colors.textDim, fontSize: 11, fontWeight: 700, cursor: currentOrder.length ? 'pointer' : 'not-allowed' }}
+            >
+              💳 Cobrar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+
+  const seleccionarFormaPago = (forma: MetodoPago) => {
+    setSelectedPayment(forma.id)
+    if (forma.identificador === 'credito') {
+      setShowCobrar(false)
+      return
+    }
+    setPagoPopup({ fpagoId: forma.id, esBs: forma.moneda === 'bs' })
+    const sub = currentOrder.reduce((s, i) => s + i.precio * i.cantidad, 0)
+    const tax = sub * 0.10
+    const tip = sub * (cobroTipPct / 100)
+    const totalUSD = sub + tax + tip
+    const pagado = cobroPagos.reduce((s, p) => s + p.montoUSD, 0)
+    const pendUSD = Math.max(0, totalUSD - pagado)
+    const valor = forma.moneda === 'bs' ? (pendUSD * tasaBCV).toFixed(2) : pendUSD.toFixed(2)
+    setPagoInput(valor)
+  }
+
+  const aceptarPagoPopup = () => {
+    if (!pagoPopup) return
+    const recibido = parseFloat(pagoInput) || 0
+    if (recibido <= 0) return
+    const forma = metodosPago.find(f => f.id === pagoPopup.fpagoId)
+    if (!forma) return
+    const montoUSD = pagoPopup.esBs ? recibido / tasaBCV : recibido
+    const sym = pagoPopup.esBs ? 'Bs' : '$'
+    const display = pagoPopup.esBs
+      ? `${sym} ${recibido.toLocaleString('es-VE', { maximumFractionDigits: 2 })}`
+      : `${sym} ${recibido.toFixed(2)}`
+    setCobroPagos(prev => [...prev, {
+      formaId: forma.id, nombre: forma.label, emoji: forma.emoji, montoUSD, montoDisplay: display,
+    }])
+    setPagoPopup(null)
+    setPagoInput('')
+  }
+
+  const eliminarPago = (idx: number) => setCobroPagos(prev => prev.filter((_, i) => i !== idx))
+
+  const confirmarCobro = () => {
+    if (!cobroPagos.length) return
+    const sub = currentOrder.reduce((s, i) => s + i.precio * i.cantidad, 0)
+    const total = sub * 1.10 + sub * (cobroTipPct / 100)
+    const pagado = cobroPagos.reduce((s, p) => s + p.montoUSD, 0)
+    if (total - pagado > 0.005) return
+    if (selectedTable) {
+      setTables(prev => prev.map(t => t.id === selectedTable.id
+        ? { ...t, estado: 'libre' as TableStatus, pedido: undefined, monto: undefined, opened: undefined, cliente: undefined }
+        : t))
+    }
+    setShowCobrar(false)
+    setCobroPagos([])
+    setCobroTipPct(0)
+    setSelectedTable(null)
+    setCurrentView('mesas')
+  }
+
+  const renderPagoPopup = () => {
+    if (!pagoPopup) return null
+    const forma = metodosPago.find(f => f.id === pagoPopup.fpagoId)
+    if (!forma) return null
+    const sub = currentOrder.reduce((s, i) => s + i.precio * i.cantidad, 0)
+    const totalUSD = sub * 1.10 + sub * (cobroTipPct / 100)
+    const pagado = cobroPagos.reduce((s, p) => s + p.montoUSD, 0)
+    const pendUSD = Math.max(0, totalUSD - pagado)
+    const pendBs = pendUSD * tasaBCV
+    const sym = pagoPopup.esBs ? 'Bs' : '$'
+    const totalStr = pagoPopup.esBs
+      ? pendBs.toLocaleString('es-VE', { maximumFractionDigits: 2 })
+      : `${pendUSD.toFixed(2)}`
+    const recibido = parseFloat(pagoInput) || 0
+    const totalRef = pagoPopup.esBs ? pendBs : pendUSD
+    const vuelto = recibido - totalRef
+    let vueltoText: { color: string; text: string } | null = null
+    if (recibido > 0) {
+      if (vuelto >= 0) {
+        vueltoText = { color: colors.green, text: `Vuelto: ${sym} ${pagoPopup.esBs ? vuelto.toLocaleString('es-VE', { maximumFractionDigits: 2 }) : vuelto.toFixed(2)}` }
+      } else {
+        vueltoText = { color: colors.amber, text: `Pago parcial — quedan ${sym} ${Math.abs(vuelto).toFixed(2)}` }
+      }
+    }
+    return (
+      <div
+        onClick={(e) => { if (e.target === e.currentTarget) setPagoPopup(null) }}
+        style={{ position: 'fixed', inset: 0, zIndex: 900, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      >
+        <div style={{ background: colors.surface, border: `2px solid ${colors.orangeB}`, borderRadius: 16, padding: '24px 28px', minWidth: 320, maxWidth: 400, textAlign: 'center', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
+          <div style={{ fontFamily: 'Fraunces, serif', fontSize: 18, fontWeight: 700, color: colors.text, marginBottom: 4 }}>{forma.emoji} {forma.label}</div>
+          <div style={{ fontSize: 10, fontFamily: 'DM Mono, monospace', letterSpacing: 2, color: colors.textDim, marginBottom: 14 }}>MONTO RECIBIDO</div>
+          <div style={{ fontSize: 11, fontFamily: 'DM Mono, monospace', color: colors.textDim, marginBottom: 4 }}>
+            PENDIENTE <span style={{ color: colors.orange }}>{totalStr}</span>
+          </div>
+          <input
+            type="number"
+            step="0.01"
+            value={pagoInput}
+            onChange={(e) => setPagoInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { e.preventDefault(); aceptarPagoPopup() }
+              if (e.key === 'Escape') { e.preventDefault(); setPagoPopup(null) }
+            }}
+            autoFocus
+            style={{ width: '100%', fontFamily: 'Fraunces, serif', fontSize: 36, fontWeight: 900, color: colors.text, background: colors.surface2, border: `2px solid ${colors.orange}`, borderRadius: 10, padding: '12px 16px', textAlign: 'right', outline: 'none', marginBottom: 8, boxSizing: 'border-box' }}
+          />
+          <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 13, fontWeight: 600, minHeight: 20, marginBottom: 16, color: vueltoText?.color || 'transparent' }}>
+            {vueltoText?.text || '·'}
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button
+              onClick={() => setPagoPopup(null)}
+              style={{ flex: 1, padding: 12, borderRadius: 8, border: `1px solid ${colors.redB}`, background: colors.redDim, color: colors.red, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}
+            >✕ Cancelar</button>
+            <button
+              onClick={aceptarPagoPopup}
+              style={{ flex: 2, padding: 12, borderRadius: 8, border: 'none', background: colors.orange, color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}
+            >✅ Aceptar</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const renderCobrarModal = () => {
+    if (!showCobrar) return null
+    const sub = currentOrder.reduce((s, i) => s + i.precio * i.cantidad, 0)
+    const tax = sub * 0.10
+    const tip = sub * (cobroTipPct / 100)
+    const totalUSD = sub + tax + tip
+    const totalBs = totalUSD * tasaBCV
+    const pagado = cobroPagos.reduce((s, p) => s + p.montoUSD, 0)
+    const pendUSD = Math.max(0, totalUSD - pagado)
+    const vueltoUSD = Math.max(0, pagado - totalUSD)
+    const puedeConfirmar = cobroPagos.length > 0 && pendUSD < 0.005
+    const mesaLabel = selectedTable ? `Mesa ${selectedTable.numero}` : 'Sin mesa'
+    const metodoActivo = cobroPagos.length === 0 ? 'Sin forma de pago seleccionada' : `${cobroPagos.length} pago${cobroPagos.length !== 1 ? 's' : ''} registrado${cobroPagos.length !== 1 ? 's' : ''}`
+
+    return (
+      <>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 600, background: colors.bg, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderBottom: `1px solid ${colors.border}`, background: colors.topbar, flexShrink: 0 }}>
+            <div>
+              <div style={{ fontFamily: 'Fraunces, serif', fontSize: 18, fontWeight: 700, color: colors.text }}>💳 Cobro — {mesaLabel}</div>
+              <div style={{ fontSize: 11, fontFamily: 'DM Mono, monospace', color: colors.textDim, marginTop: 2 }}>{metodoActivo}</div>
+            </div>
+            <button
+              onClick={() => setShowCobrar(false)}
+              style={{ width: 32, height: 32, borderRadius: 6, background: colors.surface2, border: `1px solid ${colors.border}`, color: colors.textMid, cursor: 'pointer', fontSize: 14 }}
+            >✕</button>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 148px', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+
+            <div style={{ display: 'flex', flexDirection: 'column', padding: 16, gap: 12, overflowY: 'auto', minHeight: 0 }}>
+
+              <div style={{ border: `1px solid ${colors.border}`, borderRadius: 8, overflow: 'hidden', background: colors.surface, maxHeight: '30vh', overflowY: 'auto', flexShrink: 0 }}>
+                {currentOrder.length === 0 ? (
+                  <div style={{ color: colors.textDim, fontFamily: 'DM Mono, monospace', fontSize: 11, textAlign: 'center', padding: 20 }}>Sin productos</div>
+                ) : currentOrder.map(item => (
+                  <div key={item.uid} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 12px', borderBottom: `1px solid ${colors.border}` }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontFamily: 'Fraunces, serif', fontSize: 14, fontWeight: 700, color: colors.orange }}>{item.cantidad}×</span>
+                      <span style={{ fontSize: 12, color: colors.text }}>{item.nombre}</span>
+                    </div>
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 12, fontWeight: 700, color: colors.text }}>${(item.precio * item.cantidad).toFixed(2)}</div>
+                      <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 10, color: colors.textDim }}>Bs {(item.precio * item.cantidad * tasaBCV).toFixed(2)}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ background: colors.surface2, border: `1px solid ${colors.border}`, borderRadius: 8, padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 4, flexShrink: 0 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: colors.textDim }}>
+                  <span>Subtotal</span>
+                  <span style={{ fontFamily: 'DM Mono, monospace' }}>${sub.toFixed(2)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: colors.textDim }}>
+                  <span>Impuesto 10%</span>
+                  <span style={{ fontFamily: 'DM Mono, monospace' }}>${tax.toFixed(2)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: colors.green, alignItems: 'center' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    Propina
+                    <input
+                      type="number"
+                      value={cobroTipPct}
+                      min={0}
+                      step={0.5}
+                      onChange={(e) => setCobroTipPct(parseFloat(e.target.value) || 0)}
+                      style={{ width: 42, background: 'transparent', border: 'none', borderBottom: `1px solid ${colors.border}`, color: colors.green, fontFamily: 'DM Mono, monospace', fontSize: 11, textAlign: 'right', outline: 'none' }}
+                    /> %
+                  </span>
+                  <span style={{ fontFamily: 'DM Mono, monospace' }}>${tip.toFixed(2)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 6, borderTop: `1px solid ${colors.border}` }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: colors.text }}>TOTAL</span>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontFamily: 'Fraunces, serif', fontSize: 26, fontWeight: 900, color: colors.orange }}>${totalUSD.toFixed(2)}</div>
+                    <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 10, color: colors.textDim }}>Bs {totalBs.toFixed(2)}</div>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ flexShrink: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <span style={{ fontSize: 10, fontFamily: 'DM Mono, monospace', letterSpacing: 2, color: colors.textDim }}>PAGOS REGISTRADOS</span>
+                  {cobroPagos.length > 0 && (
+                    <button
+                      onClick={() => setCobroPagos([])}
+                      style={{ fontSize: 10, fontFamily: 'DM Mono, monospace', color: colors.red, background: 'transparent', border: 'none', cursor: 'pointer', padding: '2px 6px' }}
+                    >✕ Limpiar</button>
+                  )}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minHeight: 32 }}>
+                  {cobroPagos.length === 0 ? (
+                    <div style={{ fontSize: 10, fontFamily: 'DM Mono, monospace', color: colors.textDim, textAlign: 'center', padding: '8px 0' }}>—</div>
+                  ) : cobroPagos.map((p, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', background: colors.surface2, border: `1px solid ${colors.border}`, borderRadius: 6 }}>
+                      <span style={{ fontSize: 11, color: colors.text }}>{p.emoji} {p.nombre}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 11, fontWeight: 700, color: colors.green }}>{p.montoDisplay}</span>
+                        <button
+                          onClick={() => eliminarPago(i)}
+                          style={{ width: 18, height: 18, borderRadius: 4, border: 'none', background: 'transparent', color: colors.textDim, cursor: 'pointer', fontSize: 11 }}
+                        >✕</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
+                <div style={{ flex: 1, background: colors.surface2, border: `1px solid ${colors.border}`, borderRadius: 8, padding: '10px 12px' }}>
+                  <div style={{ fontSize: 10, fontFamily: 'DM Mono, monospace', color: colors.textDim, marginBottom: 4 }}>PENDIENTE</div>
+                  <div style={{ fontFamily: 'Fraunces, serif', fontSize: 22, fontWeight: 900, color: colors.orange }}>${pendUSD.toFixed(2)}</div>
+                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 10, color: colors.textDim }}>Bs {(pendUSD * tasaBCV).toFixed(2)}</div>
+                </div>
+                <div style={{ flex: 1, background: colors.greenDim, border: `1px solid ${colors.greenB}`, borderRadius: 8, padding: '10px 12px' }}>
+                  <div style={{ fontSize: 10, fontFamily: 'DM Mono, monospace', color: colors.green, marginBottom: 4 }}>VUELTO</div>
+                  <div style={{ fontFamily: 'Fraunces, serif', fontSize: 22, fontWeight: 900, color: colors.green }}>${vueltoUSD.toFixed(2)}</div>
+                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 10, color: colors.green }}>Bs {(vueltoUSD * tasaBCV).toFixed(2)}</div>
+                </div>
+              </div>
+
+              <button
+                onClick={confirmarCobro}
+                disabled={!puedeConfirmar}
+                style={{
+                  width: '100%', padding: 16, fontSize: 15, fontWeight: 700, borderRadius: 8, border: 'none',
+                  background: puedeConfirmar ? colors.green : colors.surface2,
+                  color: puedeConfirmar ? '#000' : colors.textDim,
+                  cursor: puedeConfirmar ? 'pointer' : 'not-allowed',
+                  transition: 'all 0.2s', fontFamily: 'DM Sans, sans-serif', flexShrink: 0,
+                }}
+              >
+                ✅ Confirmar cobro
               </button>
             </div>
+
+            <div style={{ background: '#0f1923', borderLeft: '2px solid rgba(0,0,0,0.4)', display: 'flex', flexDirection: 'column' }}>
+              {renderRKey('Corte X', '📊', '6', () => setShowCorteX(true), 'amber')}
+              {renderRKey('Corte Z', '🔒', '7', () => setShowCorteZ(true), 'red')}
+              <div style={{ flex: 1 }} />
+              {renderRKey('Cancelar', '✕', 'ESC', () => setShowCobrar(false), 'red')}
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${metodosPago.length}, 1fr)`, flexShrink: 0, borderTop: '2px solid rgba(0,0,0,0.4)', background: '#0f1923' }}>
+            {metodosPago.map((f, i) => {
+              const isSelected = selectedPayment === f.id && pagoPopup?.fpagoId === f.id
+              return (
+                <div
+                  key={f.id}
+                  onClick={() => seleccionarFormaPago(f)}
+                  style={{
+                    position: 'relative', overflow: 'hidden', cursor: 'pointer',
+                    height: 76, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                    background: RKEY_BG.blue,
+                    borderRight: '1px solid rgba(0,0,0,0.3)',
+                    outline: isSelected ? '3px solid #fff' : 'none',
+                    outlineOffset: -3,
+                    filter: isSelected ? 'brightness(1.35)' : 'brightness(1)',
+                    transition: 'filter 0.12s',
+                  }}
+                  onMouseEnter={(e) => { if (!isSelected) (e.currentTarget as HTMLElement).style.filter = 'brightness(1.1)' }}
+                  onMouseLeave={(e) => { if (!isSelected) (e.currentTarget as HTMLElement).style.filter = 'brightness(1)' }}
+                >
+                  <div style={{ position: 'absolute', right: -8, top: '50%', transform: 'translateY(-48%)', fontFamily: 'DM Sans', fontWeight: 900, fontSize: 68, lineHeight: 1, letterSpacing: -4, color: 'rgba(255,255,255,0.07)', pointerEvents: 'none' }}>{i + 1}</div>
+                  <div style={{ position: 'absolute', top: 5, left: 7, fontFamily: 'DM Sans', fontWeight: 800, fontSize: 12, color: '#fff', zIndex: 1 }}>F{i + 1}</div>
+                  <span style={{ fontSize: 22, lineHeight: 1, zIndex: 1, position: 'relative', top: -3, filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.4))' }}>{f.emoji}</span>
+                  <span style={{ position: 'absolute', bottom: 5, left: 0, right: 0, fontSize: 8, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase', color: 'rgba(255,255,255,0.85)', textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', padding: '0 4px', zIndex: 1 }}>
+                    {f.label}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+        {renderPagoPopup()}
+      </>
+    )
+  }
+
+
+  const FullScreenModal = ({ title, sub, onClose, children }: { title: string; sub?: string; onClose: () => void; children: React.ReactNode }) => (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 700, background: colors.bg, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderBottom: `1px solid ${colors.border}`, background: colors.topbar, flexShrink: 0 }}>
+        <div>
+          <div style={{ fontFamily: 'Fraunces, serif', fontSize: 18, fontWeight: 700, color: colors.text }}>{title}</div>
+          {sub && <div style={{ fontSize: 10, fontFamily: 'DM Mono, monospace', color: colors.textDim, marginTop: 2 }}>{sub}</div>}
+        </div>
+        <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 6, background: colors.surface2, border: `1px solid ${colors.border}`, color: colors.textMid, cursor: 'pointer', fontSize: 14 }}>✕</button>
+      </div>
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', minHeight: 0 }}>{children}</div>
+    </div>
+  )
+
+  const Card = ({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) => (
+    <div style={{ background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: 10, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderBottom: `1px solid ${colors.border}`, background: colors.surface2 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: colors.text, fontFamily: 'DM Sans, sans-serif' }}>{title}</div>
+        {action}
+      </div>
+      {children}
+    </div>
+  )
+
+  const renderCorteXModal = () => {
+    if (!showCorteX) return null
+    const close = () => setShowCorteX(false)
+    const totalBilletesUSD = BILLETES_USD.reduce((s, b) => s + b * (cortexBilletesUSD[b] || 0), 0) + cortexSueltoUSD
+    const totalBilletesBs = BILLETES_BS.reduce((s, b) => s + b * (cortexBilletesBs[b] || 0), 0) + cortexSueltoBs
+    const totalBsEnUsd = totalBilletesBs / tasaBCV
+    const totalEfectivoContado = totalBilletesUSD + totalBsEnUsd
+    const efectivoSistema = (SISTEMA_FPAGO_DEMO['efectivo-usd'] || 0) + (SISTEMA_FPAGO_DEMO['efectivo-bs'] || 0)
+    const efectivoDif = totalEfectivoContado - efectivoSistema
+
+    const formasContadas = Object.entries(SISTEMA_FPAGO_DEMO).filter(([id]) => id !== 'efectivo-usd' && id !== 'efectivo-bs')
+    const totalDifFormas = formasContadas.reduce((s, [id, sys]) => s + ((cortexFpagoContado[id] || 0) - sys), 0) + efectivoDif
+
+    const meta = `Cajero: ${currentUser?.nombre || '—'} · Apertura: ${clock.time} · Tasa: ${tasaBCV.toFixed(2)} Bs/$`
+
+    return (
+      <FullScreenModal title="📊 Corte X — Cuadre de Turno" sub={meta} onClose={close}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <Card title="💵 Conteo de Efectivo">
+            <div style={{ padding: '12px 14px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div>
+                <div style={{ fontSize: 9, fontFamily: 'DM Mono, monospace', letterSpacing: 2, color: colors.textDim, marginBottom: 8 }}>BILLETES USD</div>
+                {BILLETES_USD.map(b => (
+                  <div key={b} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                    <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 11, color: colors.textDim, minWidth: 32 }}>${b}</span>
+                    <input
+                      type="number"
+                      min={0}
+                      placeholder="0"
+                      value={cortexBilletesUSD[b] || ''}
+                      onChange={(e) => setCortexBilletesUSD(prev => ({ ...prev, [b]: parseInt(e.target.value) || 0 }))}
+                      style={{ flex: 1, background: colors.surface2, border: `1px solid ${colors.border}`, borderRadius: 5, padding: '4px 7px', color: colors.text, fontFamily: 'DM Mono, monospace', fontSize: 12, outline: 'none' }}
+                    />
+                    <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 11, color: colors.green, minWidth: 50, textAlign: 'right' }}>
+                      ${(b * (cortexBilletesUSD[b] || 0)).toFixed(0)}
+                    </span>
+                  </div>
+                ))}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, paddingTop: 6, borderTop: `1px solid ${colors.border}` }}>
+                  <span style={{ fontSize: 10, color: colors.textDim, minWidth: 60 }}>Suelto $</span>
+                  <input
+                    type="number" step="0.01" placeholder="0.00"
+                    value={cortexSueltoUSD || ''}
+                    onChange={(e) => setCortexSueltoUSD(parseFloat(e.target.value) || 0)}
+                    style={{ flex: 1, background: colors.surface2, border: `1px solid ${colors.border}`, borderRadius: 5, padding: '4px 7px', color: colors.text, fontFamily: 'DM Mono, monospace', fontSize: 12, outline: 'none' }}
+                  />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, fontSize: 12 }}>
+                  <span style={{ color: colors.textDim }}>Total USD</span>
+                  <span style={{ fontFamily: 'DM Mono, monospace', fontWeight: 700, color: colors.green }}>${totalBilletesUSD.toFixed(2)}</span>
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 9, fontFamily: 'DM Mono, monospace', letterSpacing: 2, color: colors.textDim, marginBottom: 8 }}>BILLETES Bs</div>
+                {BILLETES_BS.map(b => (
+                  <div key={b} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                    <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 11, color: colors.textDim, minWidth: 32 }}>Bs{b}</span>
+                    <input
+                      type="number" min={0} placeholder="0"
+                      value={cortexBilletesBs[b] || ''}
+                      onChange={(e) => setCortexBilletesBs(prev => ({ ...prev, [b]: parseInt(e.target.value) || 0 }))}
+                      style={{ flex: 1, background: colors.surface2, border: `1px solid ${colors.border}`, borderRadius: 5, padding: '4px 7px', color: colors.text, fontFamily: 'DM Mono, monospace', fontSize: 12, outline: 'none' }}
+                    />
+                    <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 11, color: colors.cyan, minWidth: 60, textAlign: 'right' }}>
+                      Bs{(b * (cortexBilletesBs[b] || 0)).toLocaleString('es-VE')}
+                    </span>
+                  </div>
+                ))}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, paddingTop: 6, borderTop: `1px solid ${colors.border}` }}>
+                  <span style={{ fontSize: 10, color: colors.textDim, minWidth: 60 }}>Suelto Bs</span>
+                  <input
+                    type="number" step="1" placeholder="0"
+                    value={cortexSueltoBs || ''}
+                    onChange={(e) => setCortexSueltoBs(parseFloat(e.target.value) || 0)}
+                    style={{ flex: 1, background: colors.surface2, border: `1px solid ${colors.border}`, borderRadius: 5, padding: '4px 7px', color: colors.text, fontFamily: 'DM Mono, monospace', fontSize: 12, outline: 'none' }}
+                  />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, fontSize: 12 }}>
+                  <span style={{ color: colors.textDim }}>Total Bs ≈ USD</span>
+                  <span style={{ fontFamily: 'DM Mono, monospace', fontWeight: 700, color: colors.cyan }}>${totalBsEnUsd.toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          <Card title="💳 Ingresos por Forma de Pago">
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ background: colors.surface2 }}>
+                  {['Forma de Pago', 'Sistema ($)', 'Contado ($)', 'Diferencia'].map(h => (
+                    <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 9, fontFamily: 'DM Mono, monospace', letterSpacing: 1, color: colors.textDim, fontWeight: 600 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style={{ padding: '8px 12px', fontSize: 12, color: colors.text, borderBottom: `1px solid ${colors.border}` }}>💵 Efectivo (USD+Bs)</td>
+                  <td style={{ padding: '8px 12px', fontFamily: 'DM Mono, monospace', fontSize: 12, color: colors.textMid, borderBottom: `1px solid ${colors.border}` }}>${efectivoSistema.toFixed(2)}</td>
+                  <td style={{ padding: '8px 12px', fontFamily: 'DM Mono, monospace', fontSize: 12, color: colors.green, borderBottom: `1px solid ${colors.border}` }}>${totalEfectivoContado.toFixed(2)}</td>
+                  <td style={{ padding: '8px 12px', fontFamily: 'DM Mono, monospace', fontSize: 12, fontWeight: 700, color: Math.abs(efectivoDif) < 0.01 ? colors.green : colors.amber, borderBottom: `1px solid ${colors.border}` }}>
+                    {efectivoDif >= 0 ? '+' : ''}${efectivoDif.toFixed(2)}
+                  </td>
+                </tr>
+                {formasContadas.map(([id, sys]) => {
+                  const forma = metodosPago.find(f => f.id === id)
+                  const contado = cortexFpagoContado[id] || 0
+                  const dif = contado - sys
+                  return (
+                    <tr key={id}>
+                      <td style={{ padding: '8px 12px', fontSize: 12, color: colors.text, borderBottom: `1px solid ${colors.border}` }}>{forma?.emoji} {forma?.label || id}</td>
+                      <td style={{ padding: '8px 12px', fontFamily: 'DM Mono, monospace', fontSize: 12, color: colors.textMid, borderBottom: `1px solid ${colors.border}` }}>${sys.toFixed(2)}</td>
+                      <td style={{ padding: '8px 12px', borderBottom: `1px solid ${colors.border}` }}>
+                        <input
+                          type="number" step="0.01" placeholder="0.00"
+                          value={contado || ''}
+                          onChange={(e) => setCortexFpagoContado(prev => ({ ...prev, [id]: parseFloat(e.target.value) || 0 }))}
+                          style={{ width: 90, background: colors.surface2, border: `1px solid ${colors.border}`, borderRadius: 5, padding: '4px 7px', color: colors.text, fontFamily: 'DM Mono, monospace', fontSize: 12, textAlign: 'right', outline: 'none' }}
+                        />
+                      </td>
+                      <td style={{ padding: '8px 12px', fontFamily: 'DM Mono, monospace', fontSize: 12, fontWeight: 700, color: Math.abs(dif) < 0.01 ? colors.green : colors.amber, borderBottom: `1px solid ${colors.border}` }}>
+                        {dif >= 0 ? '+' : ''}${dif.toFixed(2)}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', borderTop: `1px solid ${colors.border}` }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: colors.text }}>TOTAL DIFERENCIA</span>
+              <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 14, fontWeight: 700, color: Math.abs(totalDifFormas) < 0.01 ? colors.green : colors.amber }}>
+                {totalDifFormas >= 0 ? '+' : ''}${totalDifFormas.toFixed(2)}
+              </span>
+            </div>
+          </Card>
+
+          <Card title="📋 Movimientos del Turno">
+            <div style={{ padding: 14, fontSize: 11, fontFamily: 'DM Mono, monospace', color: colors.textDim, textAlign: 'center' }}>
+              Sin movimientos registrados en este turno
+            </div>
+          </Card>
+        </div>
+
+        <div style={{ width: 280, flexShrink: 0, background: colors.surface, borderLeft: `1px solid ${colors.border}`, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+          <div style={{ padding: 14, borderBottom: `1px solid ${colors.border}` }}>
+            <div style={{ fontSize: 9, fontFamily: 'DM Mono, monospace', letterSpacing: 2, color: colors.textDim, marginBottom: 10 }}>RESUMEN DEL TURNO</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                <span style={{ color: colors.textDim }}>Ventas sistema</span>
+                <span style={{ fontFamily: 'DM Mono, monospace', color: colors.text }}>${Object.values(SISTEMA_FPAGO_DEMO).reduce((s, v) => s + v, 0).toFixed(2)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                <span style={{ color: colors.textDim }}>Efectivo contado</span>
+                <span style={{ fontFamily: 'DM Mono, monospace', color: colors.green }}>${totalEfectivoContado.toFixed(2)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                <span style={{ color: colors.textDim }}>Diferencia total</span>
+                <span style={{ fontFamily: 'DM Mono, monospace', fontWeight: 700, color: Math.abs(totalDifFormas) < 0.01 ? colors.green : colors.amber }}>
+                  {totalDifFormas >= 0 ? '+' : ''}${totalDifFormas.toFixed(2)}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div style={{ padding: 14, borderBottom: `1px solid ${colors.border}` }}>
+            <div style={{ fontSize: 9, fontFamily: 'DM Mono, monospace', letterSpacing: 2, color: colors.textDim, marginBottom: 8 }}>FONDO PARA SIGUIENTE CAJERO ($)</div>
+            <input
+              type="number" step="0.01" placeholder="0.00"
+              value={cortexFondo || ''}
+              onChange={(e) => setCortexFondo(parseFloat(e.target.value) || 0)}
+              style={{ width: '100%', background: colors.surface2, border: `1px solid ${colors.border}`, borderRadius: 6, padding: '8px 10px', color: colors.text, fontFamily: 'DM Mono, monospace', fontSize: 16, outline: 'none', boxSizing: 'border-box' }}
+            />
+          </div>
+          <div style={{ padding: 14, borderBottom: `1px solid ${colors.border}` }}>
+            <div style={{ fontSize: 9, fontFamily: 'DM Mono, monospace', letterSpacing: 2, color: colors.textDim, marginBottom: 8 }}>OBSERVACIONES</div>
+            <textarea
+              rows={3} placeholder="Notas del turno..."
+              value={cortexObs}
+              onChange={(e) => setCortexObs(e.target.value)}
+              style={{ width: '100%', background: colors.surface2, border: `1px solid ${colors.border}`, borderRadius: 6, padding: '8px 10px', color: colors.text, fontSize: 12, outline: 'none', resize: 'none', boxSizing: 'border-box' }}
+            />
+          </div>
+          <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 8, marginTop: 'auto' }}>
+            <button
+              onClick={() => window.print()}
+              style={{ width: '100%', padding: '10px 14px', borderRadius: 7, border: `1px solid ${colors.border}`, background: 'transparent', color: colors.textMid, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+            >🖨️ Imprimir Reporte X</button>
+            <button
+              onClick={close}
+              style={{ width: '100%', padding: 14, borderRadius: 7, border: 'none', background: colors.orange, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+            >✅ Confirmar Corte X</button>
+            <button
+              onClick={close}
+              style={{ width: '100%', padding: '8px 14px', borderRadius: 7, border: `1px solid ${colors.border}`, background: 'transparent', color: colors.textMid, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+            >Cancelar</button>
+          </div>
+        </div>
+      </FullScreenModal>
+    )
+  }
+
+  const renderCorteZModal = () => {
+    if (!showCorteZ) return null
+    const close = () => setShowCorteZ(false)
+    const totalDiaUSD = Object.values(SISTEMA_FPAGO_DEMO).reduce((s, v) => s + v, 0)
+    const totalEgresos = cortezEgresos.reduce((s, e) => s + e.monto, 0)
+    const numeroZ = `#Z-${String(cortezNumero).padStart(4, '0')}`
+    const fechaCierre = new Date().toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric' })
+
+    return (
+      <FullScreenModal
+        title="🔒 Corte Z — Cierre del Día"
+        sub={`${numeroZ} · ${fechaCierre} · Tasa ${tasaBCV.toFixed(2)}`}
+        onClose={close}
+      >
+        <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ background: colors.redDim, border: `1px solid ${colors.redB}`, borderRadius: 8, padding: '12px 16px', display: 'flex', gap: 10 }}>
+            <span style={{ fontSize: 20, flexShrink: 0 }}>⚠️</span>
+            <div>
+              <div style={{ fontWeight: 700, color: colors.red, fontSize: 13 }}>Esta operación cierra el día completo</div>
+              <div style={{ fontSize: 11, color: colors.textDim, marginTop: 2 }}>
+                Consolida todos los turnos, genera el reporte Z y reinicia los contadores. No se puede deshacer.
+              </div>
+            </div>
+          </div>
+
+          <Card title="📊 Turnos del Día">
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ background: colors.surface2 }}>
+                  {['Turno', 'Cajero', 'Apertura', 'Cierre', 'Ventas ($)', 'Diferencia'].map(h => (
+                    <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 9, fontFamily: 'DM Mono, monospace', letterSpacing: 1, color: colors.textDim, fontWeight: 600 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style={{ padding: '8px 12px', fontSize: 12, color: colors.text, borderBottom: `1px solid ${colors.border}` }}>T1</td>
+                  <td style={{ padding: '8px 12px', fontSize: 12, color: colors.text, borderBottom: `1px solid ${colors.border}` }}>{currentUser?.nombre || '—'}</td>
+                  <td style={{ padding: '8px 12px', fontFamily: 'DM Mono, monospace', fontSize: 11, color: colors.textMid, borderBottom: `1px solid ${colors.border}` }}>08:00</td>
+                  <td style={{ padding: '8px 12px', fontFamily: 'DM Mono, monospace', fontSize: 11, color: colors.textMid, borderBottom: `1px solid ${colors.border}` }}>{clock.time}</td>
+                  <td style={{ padding: '8px 12px', fontFamily: 'DM Mono, monospace', fontSize: 12, color: colors.green, borderBottom: `1px solid ${colors.border}` }}>${totalDiaUSD.toFixed(2)}</td>
+                  <td style={{ padding: '8px 12px', fontFamily: 'DM Mono, monospace', fontSize: 12, color: colors.green, borderBottom: `1px solid ${colors.border}` }}>+$0.00</td>
+                </tr>
+              </tbody>
+            </table>
+          </Card>
+
+          <Card title="💳 Ventas del Día por Forma de Pago">
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ background: colors.surface2 }}>
+                  {['Forma de Pago', '# Trans.', 'Total ($)', 'Total Bs'].map(h => (
+                    <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 9, fontFamily: 'DM Mono, monospace', letterSpacing: 1, color: colors.textDim, fontWeight: 600 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {metodosPago.map((forma) => {
+                  const total = 0 // En una fase futura esto vendrá de las ventas reales
+                  return (
+                    <tr key={forma.id}>
+                      <td style={{ padding: '8px 12px', fontSize: 12, color: colors.text, borderBottom: `1px solid ${colors.border}` }}>{forma.emoji} {forma.label}</td>
+                      <td style={{ padding: '8px 12px', fontFamily: 'DM Mono, monospace', fontSize: 12, color: colors.textMid, borderBottom: `1px solid ${colors.border}` }}>0</td>
+                      <td style={{ padding: '8px 12px', fontFamily: 'DM Mono, monospace', fontSize: 12, color: colors.green, borderBottom: `1px solid ${colors.border}` }}>$0.00</td>
+                      <td style={{ padding: '8px 12px', fontFamily: 'DM Mono, monospace', fontSize: 11, color: colors.cyan, borderBottom: `1px solid ${colors.border}` }}>Bs 0,00</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderTop: `2px solid ${colors.orangeB}` }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: colors.text }}>TOTAL DEL DÍA</span>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontFamily: 'Fraunces, serif', fontSize: 22, fontWeight: 900, color: colors.orange }}>${totalDiaUSD.toFixed(2)}</div>
+                <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 10, color: colors.textDim }}>Bs {(totalDiaUSD * tasaBCV).toLocaleString('es-VE', { maximumFractionDigits: 2 })}</div>
+              </div>
+            </div>
+          </Card>
+
+          <Card
+            title="📤 Egresos del Día"
+            action={
+              <button
+                onClick={() => setCortezEgresos(prev => [...prev, { concepto: '', monto: 0 }])}
+                style={{ padding: '4px 10px', borderRadius: 5, border: `1px solid ${colors.border}`, background: 'transparent', color: colors.textMid, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
+              >+ Egreso</button>
+            }
+          >
+            {cortezEgresos.length === 0 ? (
+              <div style={{ padding: 14, fontSize: 11, fontFamily: 'DM Mono, monospace', color: colors.textDim, textAlign: 'center' }}>
+                Sin egresos registrados
+              </div>
+            ) : (
+              <div style={{ padding: '8px 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {cortezEgresos.map((e, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <input
+                      placeholder="Concepto"
+                      value={e.concepto}
+                      onChange={(ev) => setCortezEgresos(prev => prev.map((x, j) => j === i ? { ...x, concepto: ev.target.value } : x))}
+                      style={{ flex: 1, background: colors.surface2, border: `1px solid ${colors.border}`, borderRadius: 5, padding: '6px 10px', color: colors.text, fontSize: 12, outline: 'none' }}
+                    />
+                    <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 11, color: colors.textDim }}>$</span>
+                    <input
+                      type="number" step="0.01" placeholder="0.00"
+                      value={e.monto || ''}
+                      onChange={(ev) => setCortezEgresos(prev => prev.map((x, j) => j === i ? { ...x, monto: parseFloat(ev.target.value) || 0 } : x))}
+                      style={{ width: 90, background: colors.surface2, border: `1px solid ${colors.border}`, borderRadius: 5, padding: '6px 10px', color: colors.text, fontFamily: 'DM Mono, monospace', fontSize: 12, textAlign: 'right', outline: 'none' }}
+                    />
+                    <button
+                      onClick={() => setCortezEgresos(prev => prev.filter((_, j) => j !== i))}
+                      style={{ width: 24, height: 24, borderRadius: 4, border: 'none', background: 'transparent', color: colors.red, cursor: 'pointer', fontSize: 12 }}
+                    >✕</button>
+                  </div>
+                ))}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 6, borderTop: `1px solid ${colors.border}` }}>
+                  <span style={{ fontSize: 11, color: colors.textDim, fontFamily: 'DM Mono, monospace' }}>TOTAL EGRESOS</span>
+                  <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 12, fontWeight: 700, color: colors.red }}>${totalEgresos.toFixed(2)}</span>
+                </div>
+              </div>
+            )}
+          </Card>
+        </div>
+
+        <div style={{ width: 280, flexShrink: 0, background: colors.surface, borderLeft: `1px solid ${colors.border}`, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+          <div style={{ padding: 14, borderBottom: `1px solid ${colors.border}` }}>
+            <div style={{ fontSize: 9, fontFamily: 'DM Mono, monospace', letterSpacing: 2, color: colors.textDim, marginBottom: 8 }}>NÚMERO DE REPORTE Z</div>
+            <div style={{ fontFamily: 'Fraunces, serif', fontSize: 30, fontWeight: 900, color: colors.orange }}>{numeroZ}</div>
+            <div style={{ fontSize: 10, fontFamily: 'DM Mono, monospace', color: colors.textDim, marginTop: 2 }}>{fechaCierre} · {clock.time}</div>
+          </div>
+          <div style={{ padding: 14, borderBottom: `1px solid ${colors.border}` }}>
+            <div style={{ fontSize: 9, fontFamily: 'DM Mono, monospace', letterSpacing: 2, color: colors.textDim, marginBottom: 10 }}>RESUMEN FINAL</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                <span style={{ color: colors.textDim }}>Total ventas</span>
+                <span style={{ fontFamily: 'DM Mono, monospace', color: colors.green }}>${totalDiaUSD.toFixed(2)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                <span style={{ color: colors.textDim }}>Egresos</span>
+                <span style={{ fontFamily: 'DM Mono, monospace', color: colors.red }}>-${totalEgresos.toFixed(2)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 700, paddingTop: 6, borderTop: `1px solid ${colors.border}` }}>
+                <span style={{ color: colors.text }}>Neto del día</span>
+                <span style={{ fontFamily: 'DM Mono, monospace', color: colors.orange }}>${(totalDiaUSD - totalEgresos).toFixed(2)}</span>
+              </div>
+            </div>
+          </div>
+          <div style={{ padding: 14, borderBottom: `1px solid ${colors.border}` }}>
+            <div style={{ fontSize: 9, fontFamily: 'DM Mono, monospace', letterSpacing: 2, color: colors.textDim, marginBottom: 8 }}>OBSERVACIONES</div>
+            <textarea
+              rows={3} placeholder="Notas del cierre..."
+              value={cortezObs}
+              onChange={(e) => setCortezObs(e.target.value)}
+              style={{ width: '100%', background: colors.surface2, border: `1px solid ${colors.border}`, borderRadius: 6, padding: '8px 10px', color: colors.text, fontSize: 12, outline: 'none', resize: 'none', boxSizing: 'border-box' }}
+            />
+          </div>
+          <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 8, marginTop: 'auto' }}>
+            <button
+              onClick={() => window.print()}
+              style={{ width: '100%', padding: '10px 14px', borderRadius: 7, border: `1px solid ${colors.border}`, background: 'transparent', color: colors.textMid, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+            >🖨️ Imprimir Reporte Z</button>
+            <button
+              onClick={() => { setCortezConfirmInput(''); setShowCortezConfirm(true) }}
+              style={{ width: '100%', padding: 14, borderRadius: 7, border: 'none', background: colors.red, color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+            >🔒 Ejecutar Cierre Z</button>
+            <button
+              onClick={close}
+              style={{ width: '100%', padding: '8px 14px', borderRadius: 7, border: `1px solid ${colors.border}`, background: 'transparent', color: colors.textMid, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+            >Cancelar</button>
+          </div>
+        </div>
+      </FullScreenModal>
+    )
+  }
+
+  const renderCortezConfirmModal = () => {
+    if (!showCortezConfirm) return null
+    const close = () => setShowCortezConfirm(false)
+    const valid = cortezConfirmInput.trim().toUpperCase() === 'CERRAR'
+    const totalDiaUSD = Object.values(SISTEMA_FPAGO_DEMO).reduce((s, v) => s + v, 0)
+    const totalEgresos = cortezEgresos.reduce((s, e) => s + e.monto, 0)
+    const numeroZ = `#Z-${String(cortezNumero).padStart(4, '0')}`
+
+    const ejecutar = () => {
+      if (!valid) return
+      setCortezNumero(prev => prev + 1)
+      setTables(prev => prev.map(t => ({ ...t, estado: 'libre' as TableStatus, pedido: undefined, monto: undefined, opened: undefined, cliente: undefined, subcuentas: undefined })))
+      close()
+      setShowCorteZ(false)
+    }
+
+    return (
+      <ModalShell
+        title="⚠️ Confirmar Cierre Z"
+        sub={`${numeroZ} · Total $${totalDiaUSD.toFixed(2)} · Egresos $${totalEgresos.toFixed(2)}`}
+        onClose={close}
+        maxWidth={460}
+        footer={
+          <>
+            <button onClick={close} style={{ padding: '8px 14px', borderRadius: 7, border: `1px solid ${colors.border}`, background: 'transparent', color: colors.textMid, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Cancelar</button>
+            <button
+              onClick={ejecutar}
+              disabled={!valid}
+              style={{ padding: '8px 14px', borderRadius: 7, border: 'none', background: valid ? colors.red : colors.surface2, color: valid ? '#fff' : colors.textDim, fontSize: 13, fontWeight: 700, cursor: valid ? 'pointer' : 'not-allowed' }}
+            >🔒 Ejecutar Cierre Z</button>
+          </>
+        }
+      >
+        <div style={{ background: colors.redDim, border: `1px solid ${colors.redB}`, borderRadius: 8, padding: '14px 16px', marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, color: colors.red, fontSize: 14, marginBottom: 6 }}>Esta acción no se puede deshacer</div>
+          <div style={{ fontSize: 12, color: colors.textMid, lineHeight: 1.6 }}>
+            El Corte Z cerrará el día completo, consolidará todos los turnos y reiniciará los contadores desde cero. El reporte quedará guardado en el historial.
+          </div>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
+          {[
+            { label: 'Total ventas', value: `$${totalDiaUSD.toFixed(2)}`, color: colors.green },
+            { label: 'Egresos', value: `-$${totalEgresos.toFixed(2)}`, color: colors.red },
+            { label: 'Neto del día', value: `$${(totalDiaUSD - totalEgresos).toFixed(2)}`, color: colors.orange },
+          ].map(r => (
+            <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+              <span style={{ color: colors.textDim }}>{r.label}</span>
+              <span style={{ fontFamily: 'DM Mono, monospace', fontWeight: 700, color: r.color }}>{r.value}</span>
+            </div>
+          ))}
+        </div>
+        <div style={{ background: colors.surface2, border: `1px solid ${colors.border}`, borderRadius: 8, padding: 14 }}>
+          <div style={{ fontSize: 11, fontFamily: 'DM Mono, monospace', color: colors.textDim, marginBottom: 8, letterSpacing: 1 }}>
+            ESCRIBE <span style={{ color: colors.red, fontWeight: 700 }}>CERRAR</span> PARA CONFIRMAR
+          </div>
+          <input
+            type="text"
+            placeholder="Escribe CERRAR aquí..."
+            value={cortezConfirmInput}
+            onChange={(e) => setCortezConfirmInput(e.target.value)}
+            autoFocus
+            style={{ width: '100%', background: colors.surface, border: `1px solid ${valid ? colors.green : colors.border}`, borderRadius: 6, padding: '10px 12px', color: colors.text, fontFamily: 'DM Mono, monospace', fontSize: 14, outline: 'none', letterSpacing: 1, textTransform: 'uppercase', boxSizing: 'border-box' }}
+          />
+        </div>
+      </ModalShell>
+    )
+  }
+
+  const renderFuncionesMesaModal = () => null
+
+  const renderNotaConsumoModal = () => {
+    if (!showNotaConsumo) return null
+    const close = () => setShowNotaConsumo(false)
+    const items = currentOrder
+    const sub = items.reduce((s, i) => s + i.precio * i.cantidad, 0)
+    const tax = sub * 0.10
+    const tip = sub * 0.10
+    const total = sub + tax
+    const now = new Date()
+    const fecha = now.toLocaleDateString('es-VE')
+    const hora = now.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })
+    const cliente = typeof selectedTable?.cliente === 'object' ? selectedTable.cliente : null
+
+    return (
+      <ModalShell
+        title="🖨️ Nota de Consumo"
+        sub={`${selectedTable ? `Mesa ${selectedTable.numero}` : '—'} · Pre-cuenta`}
+        onClose={close}
+        maxWidth={420}
+        footer={
+          <>
+            <button onClick={close} style={{ padding: '8px 14px', borderRadius: 7, border: `1px solid ${colors.border}`, background: 'transparent', color: colors.textMid, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Cerrar</button>
+            <button onClick={() => window.print()} style={{ padding: '8px 14px', borderRadius: 7, border: 'none', background: colors.orange, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>🖨️ Imprimir</button>
+          </>
+        }
+      >
+        <div className="zytek-print-area" style={{ padding: 16, fontFamily: 'DM Mono, monospace', fontSize: 12, lineHeight: 1.8, background: colors.surface, color: colors.text, border: `1px solid ${colors.border}`, borderRadius: 8 }}>
+          <div style={{ textAlign: 'center', marginBottom: 12, borderBottom: `1px dashed ${colors.border}`, paddingBottom: 10 }}>
+            <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 900, color: colors.text }}>Mi Restaurante</div>
+            <div style={{ fontSize: 10, color: colors.textDim }}>Zytek Cloud ERP</div>
+            <div style={{ fontSize: 10, color: colors.textDim }}>{fecha} · {hora}</div>
+          </div>
+          <div style={{ marginBottom: 8, fontSize: 11 }}>
+            <div><strong>Mesa:</strong> {selectedTable?.id || '—'}</div>
+            {cliente && <div><strong>Cliente:</strong> {cliente.nombre}{cliente.tel ? ` · ${cliente.tel}` : ''}</div>}
+            <div style={{ fontSize: 10, color: colors.textDim }}>TC: {tasaBCV.toFixed(2)} Bs/$</div>
+          </div>
+          <div style={{ borderTop: `1px dashed ${colors.border}`, borderBottom: `1px dashed ${colors.border}`, padding: '8px 0', marginBottom: 8, fontSize: 11 }}>
+            {items.length === 0 ? (
+              <div style={{ textAlign: 'center', color: colors.textDim, padding: '8px 0' }}>Sin productos</div>
+            ) : items.map(item => (
+              <div key={item.uid} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                <span>{item.cantidad}× {item.nombre}</span>
+                <span style={{ fontFamily: 'DM Mono, monospace' }}>${(item.precio * item.cantidad).toFixed(2)}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ fontSize: 11, display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Subtotal</span><span style={{ fontFamily: 'DM Mono, monospace' }}>${sub.toFixed(2)}</span></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Impuesto 10%</span><span style={{ fontFamily: 'DM Mono, monospace' }}>${tax.toFixed(2)}</span></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', color: colors.green }}><span>Propina sug. 10%</span><span style={{ fontFamily: 'DM Mono, monospace' }}>${tip.toFixed(2)}</span></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: `1px solid ${colors.border}`, marginTop: 6, paddingTop: 6, fontWeight: 700, fontSize: 14 }}>
+              <span>TOTAL</span>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontFamily: 'Fraunces, serif', fontSize: 18, color: colors.orange }}>${total.toFixed(2)}</div>
+                <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 11, color: colors.green }}>Bs {(total * tasaBCV).toLocaleString('es-VE', { maximumFractionDigits: 2 })}</div>
+              </div>
+            </div>
+          </div>
+          <div style={{ textAlign: 'center', marginTop: 12, paddingTop: 10, borderTop: `1px dashed ${colors.border}`, fontSize: 10, color: colors.textDim }}>
+            ¡Gracias por su visita!
+          </div>
+        </div>
+      </ModalShell>
+    )
+  }
+
+  const renderCuentasModal = () => {
+    if (!showCuentas) return null
+    const close = () => setShowCuentas(false)
+    const isEditing = !!editCuenta
+    const guardar = () => {
+      if (!editCuenta || !editCuenta.banco.trim()) return
+      const exists = cuentasBanco.find(c => c.id === editCuenta.id)
+      if (exists) {
+        setCuentasBanco(prev => prev.map(c => c.id === editCuenta.id ? editCuenta : c))
+      } else {
+        setCuentasBanco(prev => [...prev, editCuenta])
+      }
+      setEditCuenta(null)
+    }
+    const eliminar = (id: string) => {
+      if (!confirm('¿Eliminar esta cuenta?')) return
+      setCuentasBanco(prev => prev.filter(c => c.id !== id))
+    }
+    return (
+      <ModalShell
+        title="🏦 Cuentas Bancarias"
+        sub="Datos de depósito mostrados al cobrar"
+        onClose={close}
+        maxWidth={560}
+        footer={
+          <>
+            <button onClick={close} style={{ padding: '8px 14px', borderRadius: 7, border: `1px solid ${colors.border}`, background: 'transparent', color: colors.textMid, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Cerrar</button>
+            {!isEditing && (
+              <button
+                onClick={() => setEditCuenta({ id: `cb_${Date.now()}`, banco: '', moneda: 'usd', numero: '', titular: '' })}
+                style={{ padding: '8px 14px', borderRadius: 7, border: 'none', background: colors.orange, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+              >+ Nueva cuenta</button>
+            )}
+          </>
+        }
+      >
+        {isEditing ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div>
+              <div style={{ fontSize: 9, fontFamily: 'DM Mono, monospace', letterSpacing: 1, color: colors.textDim, marginBottom: 4 }}>BANCO / SERVICIO</div>
+              <input
+                value={editCuenta!.banco}
+                onChange={(e) => setEditCuenta({ ...editCuenta!, banco: e.target.value })}
+                placeholder="Banesco, BDV, Zelle..."
+                autoFocus
+                style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: `1px solid ${colors.border}`, background: colors.surface2, color: colors.text, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+              />
+            </div>
+            <div>
+              <div style={{ fontSize: 9, fontFamily: 'DM Mono, monospace', letterSpacing: 1, color: colors.textDim, marginBottom: 4 }}>MONEDA</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {(['usd', 'bs'] as const).map(m => (
+                  <button
+                    key={m}
+                    onClick={() => setEditCuenta({ ...editCuenta!, moneda: m })}
+                    style={{
+                      flex: 1, padding: '8px 0', borderRadius: 6,
+                      border: `2px solid ${editCuenta!.moneda === m ? colors.orange : colors.border}`,
+                      background: editCuenta!.moneda === m ? colors.orangeDim : colors.surface2,
+                      color: editCuenta!.moneda === m ? colors.orange : colors.text,
+                      fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'DM Mono, monospace',
+                    }}
+                  >{m === 'usd' ? '💵 USD' : '💴 Bs'}</button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 9, fontFamily: 'DM Mono, monospace', letterSpacing: 1, color: colors.textDim, marginBottom: 4 }}>NÚMERO / EMAIL</div>
+              <input
+                value={editCuenta!.numero}
+                onChange={(e) => setEditCuenta({ ...editCuenta!, numero: e.target.value })}
+                placeholder="0102-... o email@..."
+                style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: `1px solid ${colors.border}`, background: colors.surface2, color: colors.text, fontSize: 13, outline: 'none', boxSizing: 'border-box', fontFamily: 'DM Mono, monospace' }}
+              />
+            </div>
+            <div>
+              <div style={{ fontSize: 9, fontFamily: 'DM Mono, monospace', letterSpacing: 1, color: colors.textDim, marginBottom: 4 }}>TITULAR</div>
+              <input
+                value={editCuenta!.titular}
+                onChange={(e) => setEditCuenta({ ...editCuenta!, titular: e.target.value })}
+                placeholder="Razón social o nombre"
+                style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: `1px solid ${colors.border}`, background: colors.surface2, color: colors.text, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', paddingTop: 8 }}>
+              <button onClick={() => setEditCuenta(null)} style={{ padding: '8px 14px', borderRadius: 7, border: `1px solid ${colors.border}`, background: 'transparent', color: colors.textMid, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>← Volver</button>
+              <button onClick={guardar} style={{ padding: '8px 14px', borderRadius: 7, border: 'none', background: colors.orange, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>💾 Guardar</button>
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {cuentasBanco.length === 0 ? (
+              <div style={{ padding: 20, textAlign: 'center', color: colors.textDim, fontSize: 12, fontFamily: 'DM Mono, monospace' }}>Sin cuentas registradas</div>
+            ) : cuentasBanco.map(c => (
+              <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: colors.surface2, border: `1px solid ${colors.border}`, borderRadius: 8 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: colors.text }}>{c.banco}</span>
+                    <span style={{ fontSize: 9, fontFamily: 'DM Mono, monospace', padding: '2px 6px', borderRadius: 4, background: c.moneda === 'usd' ? colors.greenDim : colors.cyan + '22', color: c.moneda === 'usd' ? colors.green : colors.cyan, border: `1px solid ${c.moneda === 'usd' ? colors.greenB : colors.cyan + '55'}` }}>
+                      {c.moneda.toUpperCase()}
+                    </span>
+                  </div>
+                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 11, color: colors.textDim, marginTop: 2 }}>{c.numero}</div>
+                  <div style={{ fontSize: 11, color: colors.textDim }}>{c.titular}</div>
+                </div>
+                <button onClick={() => setEditCuenta(c)} style={{ width: 28, height: 28, borderRadius: 6, border: `1px solid ${colors.border}`, background: 'transparent', color: colors.textMid, cursor: 'pointer', fontSize: 12 }}>✏️</button>
+                <button onClick={() => eliminar(c.id)} style={{ width: 28, height: 28, borderRadius: 6, border: 'none', background: 'transparent', color: colors.red, cursor: 'pointer', fontSize: 13 }}>🗑️</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </ModalShell>
+    )
+  }
+
+  const renderEditPinModal = () => {
+    if (!showEditPin || !currentUser) return null
+    const close = () => setShowEditPin(false)
+    const validar = (): boolean => {
+      if (!pinNew) { setPinError('Ingresa el nuevo PIN'); return false }
+      if (!/^\d+$/.test(pinNew)) { setPinError('Solo se permiten números'); return false }
+      if (pinNew.length < 4) { setPinError('Mínimo 4 dígitos'); return false }
+      if (pinNew !== pinConfirm) { setPinError('Los PINs no coinciden'); return false }
+      setPinError('')
+      return true
+    }
+    const guardar = () => {
+      if (!validar()) return
+      close()
+    }
+    const eliminar = () => {
+      if (currentUser.nivel === 1) { setPinError('No puedes eliminar el PIN del Super Admin'); return }
+      close()
+    }
+    return (
+      <ModalShell
+        title="🔢 Editar PIN"
+        sub={`${currentUser.nombre} · ${currentUser.rol}`}
+        onClose={close}
+        maxWidth={340}
+        footer={
+          <>
+            <button onClick={eliminar} style={{ padding: '6px 12px', borderRadius: 6, border: `1px solid ${colors.redB}`, background: colors.redDim, color: colors.red, fontSize: 11, fontWeight: 600, cursor: 'pointer', marginRight: 'auto' }}>🗑️ Eliminar</button>
+            <button onClick={close} style={{ padding: '8px 14px', borderRadius: 7, border: `1px solid ${colors.border}`, background: 'transparent', color: colors.textMid, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Cancelar</button>
+            <button onClick={guardar} style={{ padding: '8px 14px', borderRadius: 7, border: 'none', background: colors.orange, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>💾 Guardar</button>
+          </>
+        }
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div>
+            <div style={{ fontSize: 9, fontFamily: 'DM Mono, monospace', letterSpacing: 1, color: colors.textDim, marginBottom: 4 }}>NUEVO PIN</div>
+            <input
+              type="password"
+              inputMode="numeric"
+              maxLength={10}
+              value={pinNew}
+              onChange={(e) => setPinNew(e.target.value)}
+              placeholder="Solo números"
+              autoFocus
+              style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: `1px solid ${colors.border}`, background: colors.surface2, color: colors.text, fontFamily: 'DM Mono, monospace', fontSize: 16, letterSpacing: 4, textAlign: 'center', outline: 'none', boxSizing: 'border-box' }}
+            />
+          </div>
+          <div>
+            <div style={{ fontSize: 9, fontFamily: 'DM Mono, monospace', letterSpacing: 1, color: colors.textDim, marginBottom: 4 }}>CONFIRMAR PIN</div>
+            <input
+              type="password"
+              inputMode="numeric"
+              maxLength={10}
+              value={pinConfirm}
+              onChange={(e) => setPinConfirm(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') guardar() }}
+              placeholder="Repite el PIN"
+              style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: `1px solid ${colors.border}`, background: colors.surface2, color: colors.text, fontFamily: 'DM Mono, monospace', fontSize: 16, letterSpacing: 4, textAlign: 'center', outline: 'none', boxSizing: 'border-box' }}
+            />
+          </div>
+          <div style={{ fontSize: 11, color: colors.red, minHeight: 16, fontFamily: 'DM Mono, monospace' }}>{pinError}</div>
+        </div>
+      </ModalShell>
+    )
+  }
+
+  const ModalShell = ({ title, sub, onClose, maxWidth = 480, children, footer }: { title: string; sub?: string; onClose: () => void; maxWidth?: number; children: React.ReactNode; footer?: React.ReactNode }) => (
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+      style={{ position: 'fixed', inset: 0, zIndex: 700, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+    >
+      <div className="zk-modal-fade" style={{ background: colors.surface, border: `1px solid ${colors.border2}`, borderRadius: 14, width: '100%', maxWidth, maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: `1px solid ${colors.border}` }}>
+          <div>
+            <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 700, color: colors.text }}>{title}</div>
+            {sub && <div style={{ fontSize: 10, fontFamily: 'DM Mono, monospace', color: colors.textDim, marginTop: 2 }}>{sub}</div>}
+          </div>
+          <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 6, background: colors.surface2, border: `1px solid ${colors.border}`, color: colors.textMid, cursor: 'pointer', fontSize: 13 }}>✕</button>
+        </div>
+        <div style={{ padding: '16px 18px', overflowY: 'auto', flex: 1 }}>{children}</div>
+        {footer && (
+          <div style={{ padding: '12px 18px', borderTop: `1px solid ${colors.border}`, display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+            {footer}
           </div>
         )}
       </div>
     </div>
   )
 
-  const renderCobrarModal = () => {
-    if (!showCobrar) return null
-    const iva = orderTotal * 0.1
-    const igtf = selectedPayment === 'divisa' ? orderTotal * 0.03 : 0
-    const totalConImpuestos = orderTotal + iva + igtf
+  const ActBtn = ({ icon, label, sub, onClick, color }: { icon: string; label: string; sub?: string; onClick: () => void; color?: string }) => (
+    <button
+      onClick={onClick}
+      style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+        padding: '14px 10px', borderRadius: 10, cursor: 'pointer',
+        background: color ? colors.surface2 : colors.surface2,
+        border: `1px solid ${color || colors.border}`,
+        transition: 'all 0.13s',
+      }}
+      onMouseEnter={(e) => (e.currentTarget as HTMLElement).style.borderColor = colors.orange}
+      onMouseLeave={(e) => (e.currentTarget as HTMLElement).style.borderColor = color || colors.border}
+    >
+      <span style={{ fontSize: 24 }}>{icon}</span>
+      <span style={{ fontSize: 12, fontWeight: 700, color: colors.text }}>{label}</span>
+      {sub && <span style={{ fontSize: 9, color: colors.textDim, fontFamily: 'DM Mono, monospace' }}>{sub}</span>}
+    </button>
+  )
+
+  const renderFuncionesModal = () => {
+    if (!showFunciones) return null
+    const close = () => setShowFunciones(false)
+    const has = !!selectedTable
     return (
-      <div style={{ position: 'fixed', inset: 0, zIndex: 600, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-        <div style={{ background: colors.surface, border: `1px solid ${colors.border2}`, borderRadius: 14, width: '100%', maxWidth: 480, maxHeight: '90vh', overflow: 'auto', animation: 'fadeIn 0.15s ease' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: `1px solid ${colors.border}` }}>
-            <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 700 }}>💳 Cobrar</div>
-            <button
-              onClick={() => { setShowCobrar(false); setSelectedTable(null); setCurrentView('mesas') }}
-              style={{ width: 26, height: 26, borderRadius: 6, background: colors.surface2, border: `1px solid ${colors.border}`, color: colors.textMid, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}
-            >
-              ✕
-            </button>
-          </div>
-          <div style={{ padding: '18px 20px' }}>
-            <div style={{ background: colors.surface2, border: `1px solid ${colors.border}`, borderRadius: 10, padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <div>
-                <div style={{ fontSize: 11, color: colors.textDim, marginBottom: 4 }}>Mesa {selectedTable?.numero}</div>
-                <div style={{ fontSize: 9, color: colors.textDim }}>{currentOrder.length} items</div>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontFamily: 'Fraunces, serif', fontSize: 22, fontWeight: 900, color: colors.orange }}>${totalConImpuestos.toFixed(2)}</div>
-              </div>
-            </div>
-            
-            <div style={{ fontSize: 9, fontFamily: 'DM Mono, monospace', letterSpacing: 2, textTransform: 'uppercase', color: colors.textDim, marginBottom: 6 }}>Forma de pago</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
-              {FORMAS_PAGO.map(method => (
-                <button
-                  key={method.id}
-                  onClick={() => setSelectedPayment(method.id)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 8,
-                    border: `2px solid ${selectedPayment === method.id ? colors.orange : colors.border}`,
-                    background: selectedPayment === method.id ? colors.orangeDim : colors.surface2,
-                    cursor: 'pointer', fontSize: 12, fontWeight: 600, color: selectedPayment === method.id ? colors.orange : colors.text,
-                  }}
-                >
-                  <span>{method.icon}</span> {method.label}
-                </button>
-              ))}
-            </div>
-            <div style={{ background: colors.surface2, border: `1px solid ${colors.border}`, borderRadius: 8, padding: 12, marginBottom: 12 }}>
-              <div style={{ fontSize: 10, color: colors.textDim, marginBottom: 6 }}>Equivalente en Bs.</div>
-              <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 18, fontWeight: 700, color: colors.cyan }}>
-                Bs. {(totalConImpuestos * tasaBCV).toFixed(2)}
-              </div>
-            </div>
-          </div>
-          <div style={{ padding: '12px 20px', borderTop: `1px solid ${colors.border}`, display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-            <button
-              onClick={() => { setShowCobrar(false) }}
-              style={{ padding: '6px 14px', borderRadius: 7, border: `1px solid ${colors.border}`, background: 'transparent', color: colors.textMid, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={processPayment}
-              style={{ padding: '6px 14px', borderRadius: 7, border: 'none', background: colors.green, color: '#000', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
-            >
-              ✅ Procesar Pago
-            </button>
-          </div>
+      <ModalShell
+        title="⚡ Funciones de Mesas"
+        sub={has ? `Mesa ${selectedTable!.numero}` : 'Sin mesa seleccionada'}
+        onClose={close}
+        maxWidth={520}
+        footer={<button onClick={close} style={{ padding: '8px 14px', borderRadius: 7, border: `1px solid ${colors.border}`, background: 'transparent', color: colors.textMid, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Cerrar</button>}
+      >
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+          <ActBtn icon="🔄" label="Cambio de Mesa" sub="Mover ítems a otra" onClick={() => { close(); setOpMode('cambio'); setOpSelecciones(selectedTable && selectedTable.estado !== 'libre' ? [selectedTable.id] : []); setCurrentView('mesas') }} />
+          <ActBtn icon="🔗" label="Fusionar Mesas" sub="Combinar 2 cuentas" onClick={() => { close(); setOpMode('fusionar'); setOpSelecciones(selectedTable && selectedTable.estado !== 'libre' ? [selectedTable.id] : []); setCurrentView('mesas') }} />
+          <ActBtn icon="✂️" label="Dividir Cuenta" sub="Por monto o personas" onClick={() => { close(); setDivPaso('modo'); setDivModo('monto'); setDivCuentas([]); setShowDividir(true) }} />
+          <ActBtn icon="🔀" label="Unir Cuenta" sub="Reunir subcuentas" onClick={() => {
+            close()
+            if (!selectedTable?.subcuentas?.length) return
+            setTables(prev => prev.map(t => t.id === selectedTable.id ? { ...t, subcuentas: undefined } : t))
+          }} />
+          <ActBtn icon="👤" label="Asignar Cliente" sub="VIP, créditos" onClick={() => { close(); setClienteSearch(''); setNuevoCli({ nombre: '', tel: '', email: '', notas: '' }); setShowCliente(true) }} />
+          <ActBtn icon="🖨️" label="Nota de Consumo" sub="Pre-cuenta" onClick={() => { close(); setShowNotaConsumo(true) }} />
+          <ActBtn icon="🎫" label="Descuento" sub="Aplicar % a la cuenta" onClick={() => { close(); setDescuentoPct(0); setShowDescuento(true) }} />
+          <ActBtn icon="🏦" label="Cuentas Banco" sub="Para depósitos" onClick={() => { close(); setEditCuenta(null); setShowCuentas(true) }} />
         </div>
-        <style>{`
-          @keyframes fadeIn {
-            from { opacity: 0; transform: scale(0.96); }
-            to { opacity: 1; transform: scale(1); }
-          }
-        `}</style>
-      </div>
+      </ModalShell>
     )
   }
 
-  const renderAdminView = () => (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: colors.bg }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: `1px solid ${colors.border}`, background: colors.surface, flexShrink: 0 }}>
-        <div style={{ fontFamily: 'Fraunces, serif', fontSize: 18, fontWeight: 700, color: colors.text }}>⚙️ Administración</div>
-        <button onClick={() => setCurrentView('destino')} style={{ padding: '6px 12px', borderRadius: 6, border: `1px solid ${colors.border}`, background: colors.surface2, color: colors.textMid, fontSize: 12, cursor: 'pointer' }}>← Volver</button>
-      </div>
-      <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
-        <div style={{ width: 180, background: colors.topbar, borderRight: `1px solid ${colors.border}`, padding: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {[
-            { id: 'menu', label: '🍽️ Menú', icon: '🍽️' },
-            { id: 'reportes', label: '🗒️ Reportes', icon: '🗒️' },
-            { id: 'creditos', label: '💰 Créditos CxC', icon: '💰' },
-            { id: 'usuarios', label: '👥 Usuarios', icon: '👥' },
-            { id: 'config', label: '⚡ Config', icon: '⚡' },
-          ].map(item => (
-            <div
-              key={item.id}
-              onClick={() => setAdminView(item.id as typeof adminView)}
-              style={{
-                padding: '10px 12px', borderRadius: 8, cursor: 'pointer',
-                background: adminView === item.id ? colors.surface2 : 'transparent',
-                border: adminView === item.id ? `1px solid ${colors.border}` : '1px solid transparent',
-                color: adminView === item.id ? colors.orange : colors.textMid,
-                fontSize: 12, fontWeight: 600,
-              }}
-            >
-              {item.label}
-            </div>
-          ))}
+  const renderClienteModal = () => {
+    if (!showCliente) return null
+    const close = () => setShowCliente(false)
+    const q = clienteSearch.trim().toLowerCase()
+    const found = q.length >= 2
+      ? clientes.filter(c => c.nombre.toLowerCase().includes(q) || c.tel.includes(q))
+      : []
+    const asignar = (c: typeof clientes[0]) => {
+      if (!selectedTable) return
+      setTables(prev => prev.map(t => t.id === selectedTable.id ? { ...t, cliente: { id: c.id, nombre: c.nombre, tel: c.tel } } : t))
+      setSelectedTable({ ...selectedTable, cliente: { id: c.id, nombre: c.nombre, tel: c.tel } })
+      close()
+    }
+    const guardarNuevo = () => {
+      if (!nuevoCli.nombre.trim()) return
+      const c = { id: `c_${Date.now()}`, nombre: nuevoCli.nombre.trim(), tel: nuevoCli.tel.trim(), email: nuevoCli.email.trim() || undefined, notas: nuevoCli.notas.trim() || undefined }
+      setClientes(prev => [...prev, c])
+      asignar(c)
+    }
+    const quitar = () => {
+      if (!selectedTable) return
+      setTables(prev => prev.map(t => t.id === selectedTable.id ? { ...t, cliente: undefined } : t))
+      setSelectedTable({ ...selectedTable, cliente: undefined })
+      close()
+    }
+    return (
+      <ModalShell
+        title="👤 Asignar Cliente"
+        sub={selectedTable ? `Mesa ${selectedTable.numero}` : ''}
+        onClose={close}
+        maxWidth={420}
+        footer={
+          <>
+            <button onClick={quitar} style={{ padding: '6px 12px', borderRadius: 6, border: `1px solid ${colors.border}`, background: 'transparent', color: colors.red, fontSize: 11, fontWeight: 600, cursor: 'pointer', marginRight: 'auto' }}>✕ Quitar</button>
+            <button onClick={close} style={{ padding: '8px 14px', borderRadius: 7, border: `1px solid ${colors.border}`, background: 'transparent', color: colors.textMid, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Cancelar</button>
+            <button onClick={guardarNuevo} style={{ padding: '8px 14px', borderRadius: 7, border: 'none', background: colors.orange, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>✅ Crear y asignar</button>
+          </>
+        }
+      >
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 9, fontFamily: 'DM Mono, monospace', letterSpacing: 1, color: colors.textDim, textTransform: 'uppercase', marginBottom: 4 }}>Buscar cliente</div>
+          <input
+            value={clienteSearch}
+            onChange={(e) => setClienteSearch(e.target.value)}
+            placeholder="Nombre o teléfono..."
+            autoFocus
+            style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: `1px solid ${colors.border}`, background: colors.surface2, color: colors.text, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+          />
         </div>
-        <div style={{ flex: 1, padding: 16, overflow: 'auto' }}>
-          {adminView === 'menu' && (
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: colors.text, marginBottom: 16 }}>Gestión de Menú</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-                {DEMO_MENU.map(item => (
-                  <div key={item.id} style={{ background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: 8, padding: 10, textAlign: 'center' }}>
-                    <div style={{ fontSize: 24 }}>{item.emoji}</div>
-                    <div style={{ fontSize: 10, fontWeight: 600, color: colors.text, marginTop: 4 }}>{item.nombre}</div>
-                    <div style={{ fontSize: 10, color: colors.orange, fontFamily: 'DM Mono, monospace' }}>${item.precio.toFixed(2)}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          {adminView === 'config' && (
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: colors.text, marginBottom: 16 }}>Configuración</div>
-              <div style={{ background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: 10, padding: 16, maxWidth: 400 }}>
-                <div style={{ fontSize: 11, color: colors.textDim, marginBottom: 8 }}>Tasa BCV (Bs/USD)</div>
-                <input
-                  type="number"
-                  value={tasaBCV}
-                  onChange={(e) => setTasaBCV(parseFloat(e.target.value) || 0)}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: `1px solid ${colors.border}`, background: colors.surface2, color: colors.text, fontSize: 16, fontFamily: 'DM Mono, monospace' }}
-                />
-              </div>
-            </div>
-          )}
-          {adminView === 'reportes' && (
-            <div style={{ textAlign: 'center', color: colors.textDim, padding: 40 }}>
-              <div style={{ fontSize: 48, marginBottom: 16 }}>📊</div>
-              <div>Reportes en desarrollo</div>
-            </div>
-          )}
-          {adminView === 'creditos' && (
-            <div style={{ textAlign: 'center', color: colors.textDim, padding: 40 }}>
-              <div style={{ fontSize: 48, marginBottom: 16 }}>💳</div>
-              <div>Créditos CxC en desarrollo</div>
-            </div>
-          )}
-          {adminView === 'usuarios' && (
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: colors.text, marginBottom: 16 }}>Usuarios Demo</div>
-              {DEMO_USERS.map(user => (
-                <div key={user.pin} style={{ background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: 8, padding: 12, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ width: 36, height: 36, borderRadius: '50%', background: user.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>{user.nombre[0]}</div>
-                  <div>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: colors.text }}>{user.nombre}</div>
-                    <div style={{ fontSize: 10, color: colors.textDim, fontFamily: 'DM Mono, monospace' }}>{user.rol} • PIN: {user.pin}</div>
+        {found.length > 0 && (
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 9, fontFamily: 'DM Mono, monospace', letterSpacing: 1, color: colors.textDim, marginBottom: 6 }}>RESULTADOS</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 140, overflowY: 'auto' }}>
+              {found.map(c => (
+                <div
+                  key={c.id}
+                  onClick={() => asignar(c)}
+                  style={{ padding: '8px 10px', borderRadius: 6, border: `1px solid ${colors.border}`, background: colors.surface2, cursor: 'pointer' }}
+                >
+                  <div style={{ fontWeight: 700, color: colors.text, fontSize: 12 }}>{c.nombre}</div>
+                  <div style={{ fontSize: 10, color: colors.textDim, fontFamily: 'DM Mono, monospace' }}>
+                    {c.tel}{c.notas ? ` · ${c.notas}` : ''}
                   </div>
                 </div>
               ))}
             </div>
-          )}
+          </div>
+        )}
+        <div style={{ borderTop: `1px solid ${colors.border}`, paddingTop: 12 }}>
+          <div style={{ fontSize: 9, fontFamily: 'DM Mono, monospace', letterSpacing: 1, color: colors.textDim, marginBottom: 8 }}>— O CREAR NUEVO —</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            {[
+              { key: 'nombre', label: 'Nombre', placeholder: 'Nombre completo' },
+              { key: 'tel', label: 'Teléfono', placeholder: '+58 / +1' },
+              { key: 'email', label: 'Email', placeholder: 'opcional' },
+              { key: 'notas', label: 'Notas', placeholder: 'VIP, alergias...' },
+            ].map(f => (
+              <div key={f.key}>
+                <div style={{ fontSize: 9, fontFamily: 'DM Mono, monospace', letterSpacing: 1, color: colors.textDim, marginBottom: 3 }}>{f.label.toUpperCase()}</div>
+                <input
+                  value={nuevoCli[f.key as keyof typeof nuevoCli]}
+                  onChange={(e) => setNuevoCli(prev => ({ ...prev, [f.key]: e.target.value }))}
+                  placeholder={f.placeholder}
+                  style={{ width: '100%', padding: '7px 10px', borderRadius: 6, border: `1px solid ${colors.border}`, background: colors.surface2, color: colors.text, fontSize: 12, outline: 'none', boxSizing: 'border-box' }}
+                />
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
-    </div>
-  )
+      </ModalShell>
+    )
+  }
 
-  const renderCorteXModal = () => null
-  const renderCorteZModal = () => null
-  const renderFuncionesMesaModal = () => null
-  const renderClienteModal = () => null
-  const renderDividirModal = () => null
-  const renderNotaConsumoModal = () => null
-  const renderFuncionesModal = () => null
+  const renderDividirModal = () => {
+    if (!showDividir) return null
+    const close = () => setShowDividir(false)
+    const sub = currentOrder.reduce((s, i) => s + i.precio * i.cantidad, 0)
+    const totalUSD = sub * 1.10
+    const sumaCuentas = divCuentas.reduce((s, c) => s + c.monto, 0)
+    const diff = totalUSD - sumaCuentas
+    const valido = divPaso === 'config' && divCuentas.length >= 2 && Math.abs(diff) < 0.01
+
+    const setNumCuentas = (n: number) => {
+      const nn = Math.max(2, Math.min(10, n))
+      const partido = totalUSD / nn
+      setDivCuentas(Array.from({ length: nn }).map(() => ({ monto: parseFloat(partido.toFixed(2)) })))
+    }
+
+    const confirmar = () => {
+      if (!valido || !selectedTable) return
+      setTables(prev => prev.map(t => t.id === selectedTable.id
+        ? { ...t, subcuentas: divCuentas.map((c, i) => ({ id: `S${i + 1}`, monto: c.monto })) }
+        : t))
+      close()
+    }
+
+    return (
+      <ModalShell
+        title="✂️ Dividir Cuenta"
+        sub={divPaso === 'modo' ? 'Elige el modo' : `${divCuentas.length} cuentas · Total $${totalUSD.toFixed(2)}`}
+        onClose={close}
+        maxWidth={560}
+        footer={
+          <>
+            {divPaso === 'config' && (
+              <button onClick={() => { setDivPaso('modo'); setDivCuentas([]) }} style={{ padding: '8px 14px', borderRadius: 7, border: `1px solid ${colors.border}`, background: 'transparent', color: colors.textMid, fontSize: 12, fontWeight: 600, cursor: 'pointer', marginRight: 'auto' }}>← Atrás</button>
+            )}
+            <button onClick={close} style={{ padding: '8px 14px', borderRadius: 7, border: `1px solid ${colors.border}`, background: 'transparent', color: colors.textMid, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Cancelar</button>
+            {divPaso === 'config' && (
+              <button
+                onClick={confirmar}
+                disabled={!valido}
+                style={{ padding: '8px 14px', borderRadius: 7, border: 'none', background: valido ? colors.orange : colors.surface2, color: valido ? '#fff' : colors.textDim, fontSize: 12, fontWeight: 700, cursor: valido ? 'pointer' : 'not-allowed' }}
+              >✅ Confirmar</button>
+            )}
+          </>
+        }
+      >
+        {divPaso === 'modo' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <ActBtn icon="💰" label="Por monto" sub="División libre" color={divModo === 'monto' ? colors.orange : undefined} onClick={() => { setDivModo('monto'); setNumCuentas(2); setDivPaso('config') }} />
+            <ActBtn icon="🪑" label="Por personas" sub="Cada quien lo suyo" color={divModo === 'items' ? colors.orange : undefined} onClick={() => { setDivModo('items'); setNumCuentas(2); setDivPaso('config') }} />
+          </div>
+        )}
+        {divPaso === 'config' && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+              <span style={{ fontSize: 11, fontFamily: 'DM Mono, monospace', color: colors.textDim }}>NÚMERO DE CUENTAS:</span>
+              <button onClick={() => setNumCuentas(divCuentas.length - 1)} style={{ width: 28, height: 28, borderRadius: 6, border: `1px solid ${colors.border}`, background: colors.surface2, color: colors.text, cursor: 'pointer', fontSize: 14 }}>−</button>
+              <span style={{ fontFamily: 'Fraunces, serif', fontSize: 22, fontWeight: 900, color: colors.orange, minWidth: 32, textAlign: 'center' }}>{divCuentas.length}</span>
+              <button onClick={() => setNumCuentas(divCuentas.length + 1)} style={{ width: 28, height: 28, borderRadius: 6, border: `1px solid ${colors.border}`, background: colors.surface2, color: colors.text, cursor: 'pointer', fontSize: 14 }}>+</button>
+              <span style={{ marginLeft: 'auto', fontSize: 11, fontFamily: 'DM Mono, monospace', color: Math.abs(diff) < 0.01 ? colors.green : colors.amber }}>
+                Diff: ${diff.toFixed(2)}
+              </span>
+            </div>
+            {divModo === 'monto' ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {divCuentas.map((c, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: colors.surface2, borderRadius: 6, border: `1px solid ${colors.border}` }}>
+                    <span style={{ fontFamily: 'Fraunces, serif', fontSize: 14, fontWeight: 700, color: colors.orange, minWidth: 60 }}>Cuenta {i + 1}</span>
+                    <span style={{ marginLeft: 'auto', fontFamily: 'DM Mono, monospace', fontSize: 12, color: colors.textDim }}>$</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={c.monto}
+                      onChange={(e) => {
+                        const v = parseFloat(e.target.value) || 0
+                        setDivCuentas(prev => prev.map((x, j) => j === i ? { monto: v } : x))
+                      }}
+                      style={{ width: 90, padding: '5px 8px', borderRadius: 5, border: `1px solid ${colors.border}`, background: colors.surface, color: colors.text, fontFamily: 'DM Mono, monospace', fontSize: 13, fontWeight: 700, textAlign: 'right', outline: 'none' }}
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ padding: 16, background: colors.surface2, borderRadius: 8, border: `1px dashed ${colors.border}`, textAlign: 'center', color: colors.textDim, fontSize: 12, fontFamily: 'DM Mono, monospace' }}>
+                Modo "Por personas": asignar cada ítem a una persona<br/>
+                <span style={{ fontSize: 10 }}>· Disponible próximamente ·</span>
+              </div>
+            )}
+          </>
+        )}
+      </ModalShell>
+    )
+  }
+
+  const renderDescuentoModal = () => {
+    if (!showDescuento) return null
+    const close = () => setShowDescuento(false)
+    const apply = () => {
+      close()
+    }
+    return (
+      <ModalShell
+        title="🎫 Aplicar Descuento"
+        sub="Porcentaje sobre el subtotal"
+        onClose={close}
+        maxWidth={360}
+        footer={
+          <>
+            <button onClick={close} style={{ padding: '8px 14px', borderRadius: 7, border: `1px solid ${colors.border}`, background: 'transparent', color: colors.textMid, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Cancelar</button>
+            <button onClick={apply} style={{ padding: '8px 14px', borderRadius: 7, border: 'none', background: colors.orange, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>✅ Aplicar</button>
+          </>
+        }
+      >
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 14 }}>
+          {[5, 10, 15, 20].map(pct => (
+            <button
+              key={pct}
+              onClick={() => setDescuentoPct(pct)}
+              style={{
+                padding: '10px 0', borderRadius: 8,
+                border: `2px solid ${descuentoPct === pct ? colors.orange : colors.border}`,
+                background: descuentoPct === pct ? colors.orangeDim : colors.surface2,
+                color: descuentoPct === pct ? colors.orange : colors.text,
+                fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'DM Mono, monospace',
+              }}
+            >{pct}%</button>
+          ))}
+        </div>
+        <div style={{ fontSize: 9, fontFamily: 'DM Mono, monospace', letterSpacing: 1, color: colors.textDim, marginBottom: 4 }}>O PERSONALIZADO</div>
+        <input
+          type="number"
+          min={0}
+          max={100}
+          value={descuentoPct}
+          onChange={(e) => setDescuentoPct(Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)))}
+          style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: `2px solid ${colors.orange}`, background: colors.surface2, color: colors.text, fontFamily: 'Fraunces, serif', fontSize: 24, fontWeight: 900, textAlign: 'center', outline: 'none', boxSizing: 'border-box' }}
+        />
+      </ModalShell>
+    )
+  }
 
   const activeCount = tables.filter(t => t.estado !== 'libre').length
   const totalTables = tables.length
@@ -1437,9 +2961,20 @@ export default function POSRestaurant({ license }: { license: License }) {
         </span>
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: colors.surface2, border: `1px solid ${colors.border}`, borderRadius: 8, padding: '3px 10px', cursor: 'pointer' }}>
-            <div style={{ fontSize: 7, fontFamily: 'DM Mono, monospace', letterSpacing: 2, color: colors.textDim }}>TASA BCV</div>
-            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 15, fontWeight: 700, color: colors.cyan }}>—</div>
+          {paisCfg.dual && (
+            <div
+              title={`${paisCfg.tasaLabel} · click para actualizar (requiere supervisor)`}
+              onClick={() => requireAuth('actualizarTasa', () => { setTasaInput(String(tasaBCV)); setShowTasaModal(true) })}
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: colors.surface2, border: `1px solid ${colors.border}`, borderRadius: 8, padding: '3px 10px', cursor: 'pointer', minWidth: 78 }}
+            >
+              <div style={{ fontSize: 7, fontFamily: 'DM Mono, monospace', letterSpacing: 2, color: colors.textDim }}>{paisCfg.tasaLabel}</div>
+              <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 15, fontWeight: 700, color: colors.cyan, lineHeight: 1.1 }}>{tasaBCV.toFixed(2)}</div>
+              <div style={{ fontSize: 7, fontFamily: 'DM Mono, monospace', color: colors.textDim, letterSpacing: 1 }}>{paisCfg.simbolo}/$ · manual</div>
+            </div>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 56 }}>
+            <div style={{ fontSize: 9, fontFamily: 'DM Mono, monospace', color: colors.textDim, letterSpacing: 1 }}>{clock.date}</div>
+            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 14, fontWeight: 600, color: colors.text, lineHeight: 1.1 }}>{clock.time}</div>
           </div>
           <button
             onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
@@ -1447,7 +2982,19 @@ export default function POSRestaurant({ license }: { license: License }) {
           >
             {theme === 'dark' ? '☀️' : '🌙'}
           </button>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 20, background: colors.surface2, border: `1px solid ${colors.border}`, cursor: 'pointer' }}>
+          {currentUser && currentUser.nivel <= 2 && (
+            <button
+              onClick={() => { if (typeof window !== 'undefined') window.location.href = '/admin' }}
+              style={{ padding: '5px 12px', borderRadius: 6, border: `1px solid ${colors.blueB}`, background: colors.blueDim, color: colors.blue, fontSize: 11, fontFamily: 'DM Mono, monospace', cursor: 'pointer', letterSpacing: 0.5 }}
+            >
+              ⚙️ ADMIN
+            </button>
+          )}
+          <div
+            onClick={() => { if (currentUser) { setPinNew(''); setPinConfirm(''); setPinError(''); setShowEditPin(true) } }}
+            title="Cambiar PIN"
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 20, background: colors.surface2, border: `1px solid ${colors.border}`, cursor: 'pointer' }}
+          >
             <div style={{ width: 24, height: 24, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#fff', background: currentUser?.color || colors.orange }}>
               {currentUser?.nombre[0] || '?'}
             </div>
@@ -1494,24 +3041,67 @@ export default function POSRestaurant({ license }: { license: License }) {
         {displayView === 'destino' && renderDestinoView()}
         {displayView === 'mesas' && renderMesasView()}
         {displayView === 'comanda' && renderComandaView()}
-        {displayView === 'admin' && renderAdminView()}
       </div>
 
       {renderCobrarModal()}
       {renderCorteXModal()}
       {renderCorteZModal()}
       {renderFuncionesMesaModal()}
+      {renderDescuentoModal()}
+      {renderCortezConfirmModal()}
+      {renderCuentasModal()}
+      {renderEditPinModal()}
       {renderClienteModal()}
       {renderDividirModal()}
       {renderNotaConsumoModal()}
       {renderFuncionesModal()}
       {renderAuthOverlay()}
+      {renderTasaModal()}
 
       <style>{`
+        :root[data-theme="dark"] {
+          --zk-bg: #0d0d0f; --zk-surface: #16161a; --zk-surface2: #1e1e24; --zk-topbar: #111114;
+          --zk-border: rgba(255,255,255,0.08); --zk-border2: rgba(255,255,255,0.14);
+          --zk-text: #f0f0f5; --zk-text-mid: #b0b0c0; --zk-text-dim: #606070;
+          --zk-orange: #ff7c20; --zk-green: #2ee87a; --zk-red: #ff4757;
+          --zk-blue: #38b6ff; --zk-purple: #a855f7; --zk-amber: #ffc040; --zk-cyan: #00d4ff;
+          --zk-scroll-thumb: rgba(255,255,255,0.22); --zk-scroll-thumb-hover: rgba(255,255,255,0.4);
+          --zk-scroll-track: rgba(0,0,0,0.25);
+        }
+        :root[data-theme="light"] {
+          --zk-bg: #f4f4f8; --zk-surface: #fff; --zk-surface2: #f0f0f5; --zk-topbar: #fff;
+          --zk-border: rgba(0,0,0,0.1); --zk-border2: rgba(0,0,0,0.18);
+          --zk-text: #111118; --zk-text-mid: #444455; --zk-text-dim: #888899;
+          --zk-orange: #ff7c20; --zk-green: #2ee87a; --zk-red: #ff4757;
+          --zk-blue: #38b6ff; --zk-purple: #a855f7; --zk-amber: #ffc040; --zk-cyan: #00d4ff;
+          --zk-scroll-thumb: rgba(0,0,0,0.22); --zk-scroll-thumb-hover: rgba(0,0,0,0.4);
+          --zk-scroll-track: rgba(0,0,0,0.06);
+        }
+        * { box-sizing: border-box; }
         ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: rgba(0,0,0,0.25); }
-        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.22); border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.4); }
+        ::-webkit-scrollbar-track { background: var(--zk-scroll-track); }
+        ::-webkit-scrollbar-thumb { background: var(--zk-scroll-thumb); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--zk-scroll-thumb-hover); }
+        * { scrollbar-width: thin; scrollbar-color: var(--zk-scroll-thumb) var(--zk-scroll-track); }
+        .zk-scroll { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+        .zk-mesa { transition: transform 0.15s ease, box-shadow 0.15s ease; }
+        .zk-mesa:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.35); }
+        .zk-modal-fade { animation: zkFadeIn 0.16s ease; }
+        @keyframes zkFadeIn {
+          from { opacity: 0; transform: scale(0.97); }
+          to   { opacity: 1; transform: scale(1); }
+        }
+        .zk-rkey { transition: filter 0.12s, background 0.12s; }
+        .zk-rkey:hover { filter: brightness(1.1); }
+        .zk-rkey:active { filter: brightness(0.88); }
+        .zk-rkey.zk-selected { outline: 3px solid #fff; outline-offset: -3px; filter: brightness(1.35); }
+        .zk-amb-active { box-shadow: inset 3px 0 0 var(--zk-green); }
+        @media print {
+          body * { visibility: hidden; }
+          .zytek-print-area, .zytek-print-area * { visibility: visible; }
+          .zytek-print-area { position: absolute; left: 0; top: 0; width: 100%; background: #fff !important; color: #000 !important; border: none !important; }
+          .zytek-print-area * { color: #000 !important; background: transparent !important; border-color: #aaa !important; }
+        }
       `}</style>
     </div>
   )

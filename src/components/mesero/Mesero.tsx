@@ -58,10 +58,9 @@ export function Mesero({ license }: { license: License }) {
   const [selectedAmbiente, setSelectedAmbiente] = useState('salon')
   const [tables, setTables] = useState<Mesa[]>([])
   const [selectedMesa, setSelectedMesa] = useState<Mesa | null>(null)
-  const [currentStep, setCurrentStep] = useState<'cats' | 'prods' | 'qty' | 'mods'>('cats')
+  const [currentStep, setCurrentStep] = useState<'cats' | 'prods' | 'mods'>('cats')
   const [selectedCategory, setSelectedCategory] = useState<Categoria | null>(null)
   const [selectedProduct, setSelectedProduct] = useState<MenuItem | null>(null)
-  const [qty, setQty] = useState(1)
   const [orderItems, setOrderItems] = useState<OrderItem[]>([])
   const [selectedMods, setSelectedMods] = useState<string[]>([])
   const [nota, setNota] = useState('')
@@ -109,19 +108,20 @@ export function Mesero({ license }: { license: License }) {
 
   const total = orderItems.reduce((sum, item) => sum + item.subtotal, 0)
 
-  const addItem = () => {
-    if (!selectedProduct) return
+  const addItem = (product?: MenuItem) => {
+    const p = product || selectedProduct
+    if (!p) return
 
     const newItem: OrderItem = {
       id: Date.now().toString(),
-      itemId: selectedProduct.id,
-      nombre: selectedProduct.nombre,
-      emoji: selectedProduct.emoji || '🍽️',
-      precio: selectedProduct.precio,
-      cantidad: qty,
+      itemId: p.id,
+      nombre: p.nombre,
+      emoji: p.emoji || '🍽️',
+      precio: p.precio,
+      cantidad: 1,
       modificadores: selectedMods,
       nota,
-      subtotal: selectedProduct.precio * qty,
+      subtotal: p.precio,
       enviado: false,
     }
 
@@ -131,10 +131,9 @@ export function Mesero({ license }: { license: License }) {
 
   const resetProductSelection = () => {
     setSelectedProduct(null)
-    setQty(1)
     setSelectedMods([])
     setNota('')
-    setCurrentStep('cats')
+    setCurrentStep('prods')
   }
 
   const removeItem = (id: string) => {
@@ -569,17 +568,11 @@ export function Mesero({ license }: { license: License }) {
                   <>
                     <span>›</span>
                     <span
-                      onClick={() => currentStep !== 'qty' && setCurrentStep('prods')}
+                      onClick={() => setCurrentStep('prods')}
                       style={{ cursor: 'pointer', color: colors.textMid }}
                     >
                       {selectedProduct?.nombre}
                     </span>
-                  </>
-                )}
-                {currentStep === 'qty' && (
-                  <>
-                    <span>›</span>
-                    <span style={{ color: colors.text }}>Cantidad</span>
                   </>
                 )}
                 {currentStep === 'mods' && (
@@ -673,11 +666,7 @@ export function Mesero({ license }: { license: License }) {
                   {filteredItems.map(item => (
                     <div
                       key={item.id}
-                      onClick={() => {
-                        setSelectedProduct(item)
-                        setQty(1)
-                        setCurrentStep('qty')
-                      }}
+                      onClick={() => addItem(item)}
                       style={{
                         display: 'flex',
                         flexDirection: 'column',
@@ -743,167 +732,6 @@ export function Mesero({ license }: { license: License }) {
                 </div>
               </div>
             )}
-
-            {/* Step: Quantity */}
-            {currentStep === 'qty' && selectedProduct && (
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                <div style={{
-                  fontSize: 9,
-                  fontFamily: "'DM Mono', monospace",
-                  letterSpacing: 3,
-                  textTransform: 'uppercase',
-                  color: colors.textDim,
-                  padding: '8px 14px',
-                  borderBottom: `1px solid ${colors.border}`,
-                }}>
-                  CANTIDAD
-                </div>
-                <div style={{
-                  flex: 1,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 16,
-                  padding: 20,
-                }}>
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: 40, lineHeight: 1, marginBottom: 6 }}>
-                      {selectedProduct.emoji || '🍽️'}
-                    </div>
-                    <div style={{
-                      fontFamily: "'Fraunces', serif",
-                      fontSize: 16,
-                      fontWeight: 700,
-                    }}>
-                      {selectedProduct.nombre}
-                    </div>
-                    <div style={{
-                      fontFamily: "'DM Mono', monospace",
-                      fontSize: 13,
-                      color: colors.orange,
-                      marginTop: 2,
-                    }}>
-                      ${selectedProduct.precio.toFixed(2)} c/u
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                    <button
-                      onClick={() => setQty(q => Math.max(1, q - 1))}
-                      style={{
-                        width: 52,
-                        height: 52,
-                        borderRadius: 12,
-                        border: `2px solid ${colors.border}`,
-                        background: colors.surface2,
-                        color: colors.text,
-                        fontSize: 28,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontWeight: 700,
-                      }}
-                    >
-                      −
-                    </button>
-                    <div style={{
-                      fontFamily: "'Fraunces', serif",
-                      fontSize: 52,
-                      fontWeight: 900,
-                      color: colors.orange,
-                      minWidth: 70,
-                      textAlign: 'center',
-                      lineHeight: 1,
-                    }}>
-                      {qty}
-                    </div>
-                    <button
-                      onClick={() => setQty(q => q + 1)}
-                      style={{
-                        width: 52,
-                        height: 52,
-                        borderRadius: 12,
-                        border: `2px solid ${colors.border}`,
-                        background: colors.surface2,
-                        color: colors.text,
-                        fontSize: 28,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontWeight: 700,
-                      }}
-                    >
-                      +
-                    </button>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 6, width: '100%', maxWidth: 280 }}>
-                    {[1, 2, 3, 4, 5, 6, 8, 10, 12, 15].map(n => (
-                      <button
-                        key={n}
-                        onClick={() => setQty(n)}
-                        style={{
-                          padding: '10px 4px',
-                          borderRadius: 8,
-                          border: `2px solid ${colors.border}`,
-                          background: colors.surface2,
-                          color: colors.text,
-                          fontSize: 14,
-                          fontWeight: 700,
-                          fontFamily: "'DM Mono', monospace",
-                          cursor: 'pointer',
-                        }}
-                      >
-                        {n}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div style={{
-                  display: 'flex',
-                  gap: 8,
-                  padding: '10px 14px',
-                  borderTop: `1px solid ${colors.border}`,
-                  flexShrink: 0,
-                }}>
-                  <button
-                    onClick={() => setCurrentStep('prods')}
-                    style={{
-                      padding: '6px 14px',
-                      borderRadius: 7,
-                      border: `1px solid ${colors.border}`,
-                      background: 'transparent',
-                      color: colors.textMid,
-                      fontSize: 12,
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    ← Atrás
-                  </button>
-                  <button
-                    onClick={() => {
-                      addItem()
-                    }}
-                    style={{
-                      padding: '6px 14px',
-                      borderRadius: 7,
-                      border: 'none',
-                      background: colors.orange,
-                      color: '#fff',
-                      fontSize: 12,
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      flex: 1,
-                    }}
-                  >
-                    ✅ Agregar ({qty})
-                  </button>
-                </div>
-              </div>
-            )}
-
             {/* Action Keys Bar */}
             <div style={{
               display: 'grid',

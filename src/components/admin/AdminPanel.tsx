@@ -25,7 +25,7 @@ interface Category {
 interface SubGrupo {
   id: string
   nombre: string
-  categoriaId: string
+  categoria_id: string
   emoji?: string
   orden: number
 }
@@ -33,17 +33,27 @@ interface SubGrupo {
 interface ModGrupo {
   id: string
   nombre: string
-  tipo: 'excluyente' | 'multiple' | 'cantidad'
-  min: number
-  max: number
+  tipo: 'contorno' | 'extra' | 'sin' | 'seleccion'
+  min_selections: number
+  max_selections: number
 }
 
 interface Modificador {
   id: string
   nombre: string
-  grupoId: string
-  precioAdicional: number
+  grupo_id: string
+  precio_adicional: number
   activo: boolean
+}
+
+interface MetodoPago {
+  id: string
+  identificador: string
+  label: string
+  emoji: string
+  moneda: 'usd' | 'bs' | 'eur' | 'mxn'
+  activo: boolean
+  orden: number
 }
 
 export function AdminPanel({ license }: { license: License }) {
@@ -55,14 +65,30 @@ export function AdminPanel({ license }: { license: License }) {
   const [configExpanded, setConfigExpanded] = useState(false)
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [user, setUser] = useState<ZytekUser | null>(null)
+  
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
+  const isBasic = license.plan === 'basic'
 
   const [categories, setCategories] = useState<Category[]>([])
   const [subGrupos, setSubGrupos] = useState<SubGrupo[]>([])
   const [modGrupos, setModGrupos] = useState<ModGrupo[]>([])
   const [modificadores, setModificadores] = useState<Modificador[]>([])
+  const [showItemModal, setShowItemModal] = useState(false)
+  const [editingItem, setEditingItem] = useState<Partial<MenuItem> | null>(null)
+  const [showModGrupoModal, setShowModGrupoModal] = useState(false)
+  const [editingModGrupo, setEditingModGrupo] = useState<Partial<ModGrupo> | null>(null)
+  const [showModificadorModal, setShowModificadorModal] = useState(false)
+  const [editingModificador, setEditingModificador] = useState<Partial<Modificador> | null>(null)
+  const [showCategoryModal, setShowCategoryModal] = useState(false)
+  const [editingCategory, setEditingCategory] = useState<Partial<Category> | null>(null)
+  const [showSubGrupoModal, setShowSubGrupoModal] = useState(false)
+  const [editingSubGrupo, setEditingSubGrupo] = useState<Partial<SubGrupo> | null>(null)
+  const [metodosPago, setMetodosPago] = useState<MetodoPago[]>([])
+  const [showMetodoModal, setShowMetodoModal] = useState(false)
+  const [editingMetodo, setEditingMetodo] = useState<Partial<MetodoPago> | null>(null)
 
   const filters = { range: 'today' as const, desde: '', hasta: '' }
-  const { items: menuItems, loading: menuLoading, refetch: refetchMenu, updateItem } = useMenu(license.tenantId)
+  const { items: menuItems, loading: menuLoading, refetch: refetchMenu, updateItem, addItem } = useMenu(license.tenantId)
   const { sales, loading: salesLoading, refetch: refetchSales } = useSales(license.tenantId, filters)
 
   const kpis = getSalesKPIs(sales)
@@ -73,7 +99,17 @@ export function AdminPanel({ license }: { license: License }) {
     loadSubgrupos()
     loadModGrupos()
     loadModificadores()
+    loadMetodosPago()
   }, [license.tenantId])
+
+  const loadMetodosPago = async () => {
+    const { data } = await supabase
+      .from('metodos_pago')
+      .select('*')
+      .eq('tenant_id', license.tenantId)
+      .order('orden')
+    if (data) setMetodosPago(data)
+  }
 
   const loadCategories = async () => {
     const { data } = await supabase
@@ -138,6 +174,164 @@ export function AdminPanel({ license }: { license: License }) {
     purple: '#a855f7',
   }
 
+  const openItemModal = (item?: MenuItem) => {
+    if (item) {
+      setEditingItem(item)
+    } else {
+      setEditingItem({ nombre: '', precio: 0, cat: categories[0]?.id || '', activo: true, emoji: '🍽️' })
+    }
+    setShowItemModal(true)
+  }
+
+  const saveItem = async () => {
+    if (!editingItem) return
+    if (editingItem.id) {
+      await updateItem(editingItem.id, editingItem)
+    } else {
+      if (addItem) await addItem(editingItem as Omit<MenuItem, 'id'>)
+    }
+    setShowItemModal(false)
+  }
+
+  const openModGrupoModal = (grupo?: ModGrupo) => {
+    if (grupo) {
+      setEditingModGrupo(grupo)
+    } else {
+      setEditingModGrupo({ nombre: '', tipo: 'contorno', min_selections: 0, max_selections: 1 })
+    }
+    setShowModGrupoModal(true)
+  }
+
+  const saveModGrupo = async () => {
+    if (!editingModGrupo) return
+    if (editingModGrupo.id) {
+      const { error } = await supabase.from('mod_grupos').update(editingModGrupo).eq('id', editingModGrupo.id).eq('tenant_id', license.tenantId)
+      if (!error) loadModGrupos()
+    } else {
+      const { error } = await supabase.from('mod_grupos').insert({ ...editingModGrupo, tenant_id: license.tenantId })
+      if (!error) loadModGrupos()
+    }
+    setShowModGrupoModal(false)
+  }
+
+  const openModificadorModal = (mod?: Modificador) => {
+    if (mod) {
+      setEditingModificador(mod)
+    } else {
+      setEditingModificador({ nombre: '', grupo_id: modGrupos[0]?.id || '', precio_adicional: 0, activo: true })
+    }
+    setShowModificadorModal(true)
+  }
+
+  const saveModificador = async () => {
+    if (!editingModificador) return
+    if (editingModificador.id) {
+      const { error } = await supabase.from('modificadores').update(editingModificador).eq('id', editingModificador.id).eq('tenant_id', license.tenantId)
+      if (!error) loadModificadores()
+    } else {
+      const { error } = await supabase.from('modificadores').insert({ ...editingModificador, tenant_id: license.tenantId })
+      if (!error) loadModificadores()
+    }
+    setShowModificadorModal(false)
+  }
+
+  const openCategoryModal = (cat?: Category) => {
+    if (cat) {
+      setEditingCategory(cat)
+    } else {
+      setEditingCategory({ nombre: '', emoji: '🍽️', orden: categories.length + 1, activo: true })
+    }
+    setShowCategoryModal(true)
+  }
+
+  const saveCategory = async () => {
+    if (!editingCategory) return
+    if (editingCategory.id) {
+      const { error } = await supabase.from('menu_categorias').update(editingCategory).eq('id', editingCategory.id).eq('tenant_id', license.tenantId)
+      if (!error) loadCategories()
+    } else {
+      const { error } = await supabase.from('menu_categorias').insert({ ...editingCategory, tenant_id: license.tenantId })
+      if (!error) loadCategories()
+    }
+    setShowCategoryModal(false)
+  }
+
+  const openSubGrupoModal = (sub?: SubGrupo) => {
+    if (sub) {
+      setEditingSubGrupo(sub)
+    } else {
+      setEditingSubGrupo({ nombre: '', categoria_id: categories[0]?.id || '', emoji: '📐', orden: 1 })
+    }
+    setShowSubGrupoModal(true)
+  }
+
+  const saveSubGrupo = async () => {
+    if (!editingSubGrupo) return
+    if (editingSubGrupo.id) {
+      const { error } = await supabase.from('menu_subgrupos').update(editingSubGrupo).eq('id', editingSubGrupo.id).eq('tenant_id', license.tenantId)
+      if (!error) loadSubgrupos()
+    } else {
+      const { error } = await supabase.from('menu_subgrupos').insert({ ...editingSubGrupo, tenant_id: license.tenantId })
+      if (!error) loadSubgrupos()
+    }
+    setShowSubGrupoModal(false)
+  }
+
+  const openMetodoModal = (metodo?: MetodoPago) => {
+    if (metodo) {
+      setEditingMetodo(metodo)
+    } else {
+      setEditingMetodo({ identificador: '', label: '', emoji: '💵', moneda: 'usd', activo: true, orden: metodosPago.length + 1 })
+    }
+    setShowMetodoModal(true)
+  }
+
+  const saveMetodo = async () => {
+    if (!editingMetodo) return
+    if (editingMetodo.id) {
+      const { error } = await supabase.from('metodos_pago').update(editingMetodo).eq('id', editingMetodo.id).eq('tenant_id', license.tenantId)
+      if (!error) loadMetodosPago()
+    } else {
+      const { error } = await supabase.from('metodos_pago').insert({ ...editingMetodo, tenant_id: license.tenantId })
+      if (!error) loadMetodosPago()
+    }
+    setShowMetodoModal(false)
+  }
+
+  const handleNavTarget = (target: Section, requiresPro: boolean) => {
+    if (requiresPro && isBasic) {
+      setShowUpgradeModal(true)
+    } else {
+      setSection(target)
+    }
+  }
+
+  const renderSidebarItem = (target: Section, text: string, emoji: string, requiresPro: boolean = false, indented = false) => {
+    const isLocked = requiresPro && isBasic
+    const isActive = section === target
+
+    return (
+      <div 
+        style={{ 
+          display: 'flex', alignItems: 'center', gap: 8, 
+          padding: indented ? '8px 10px 8px 18px' : '8px 10px', 
+          borderRadius: 6, cursor: 'pointer', 
+          color: isActive ? styles.orange : (isLocked ? styles.textDim : styles.textMid), 
+          fontSize: 12, fontWeight: 500, marginBottom: 1, 
+          background: isActive ? styles.orangeDim : 'transparent', 
+          border: isActive ? `1px solid ${styles.orangeB}` : '1px solid transparent',
+          opacity: isLocked ? 0.6 : 1
+        }}
+        onClick={() => handleNavTarget(target, requiresPro)}
+      >
+        <span style={{ fontSize: isLocked ? 12 : (indented ? 14 : 16), width: 18, textAlign: 'center', marginRight: indented ? 0 : 8 }}>
+          {isLocked ? '🔒' : emoji}
+        </span>
+        {text}
+      </div>
+    )
+  }
+
   const renderSidebar = () => (
     <div style={{ 
       width: 220, 
@@ -153,51 +347,19 @@ export function AdminPanel({ license }: { license: License }) {
           🍽️ Menú de Ventas
         </div>
         
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', color: section === 'sec-categorias' ? styles.orange : styles.textMid, fontSize: 12, fontWeight: 500, marginBottom: 1, background: section === 'sec-categorias' ? styles.orangeDim : 'transparent', border: section === 'sec-categorias' ? `1px solid ${styles.orangeB}` : '1px solid transparent' }}
-          onClick={() => setSection('sec-categorias')}>
-          <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>🗂️</span>
-          Categorías
-        </div>
-        
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', color: section === 'sec-subgrupos' ? styles.orange : styles.textMid, fontSize: 12, fontWeight: 500, marginBottom: 1, background: section === 'sec-subgrupos' ? styles.orangeDim : 'transparent', border: section === 'sec-subgrupos' ? `1px solid ${styles.orangeB}` : '1px solid transparent' }}
-          onClick={() => setSection('sec-subgrupos')}>
-          <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>📐</span>
-          Sub-grupos
-        </div>
-        
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', color: section === 'sec-items' ? styles.orange : styles.textMid, fontSize: 12, fontWeight: 500, marginBottom: 1, background: section === 'sec-items' ? styles.orangeDim : 'transparent', border: section === 'sec-items' ? `1px solid ${styles.orangeB}` : '1px solid transparent' }}
-          onClick={() => setSection('sec-items')}>
-          <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>🍽️</span>
-          Ítems / Platos
-        </div>
-        
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', color: section === 'sec-mod-grupos' ? styles.orange : styles.textMid, fontSize: 12, fontWeight: 500, marginBottom: 1, background: section === 'sec-mod-grupos' ? styles.orangeDim : 'transparent', border: section === 'sec-mod-grupos' ? `1px solid ${styles.orangeB}` : '1px solid transparent' }}
-          onClick={() => setSection('sec-mod-grupos')}>
-          <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>🔧</span>
-          Grupos de Mods
-        </div>
-        
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', color: section === 'sec-mod-items' ? styles.orange : styles.textMid, fontSize: 12, fontWeight: 500, marginBottom: 1, background: section === 'sec-mod-items' ? styles.orangeDim : 'transparent', border: section === 'sec-mod-items' ? `1px solid ${styles.orangeB}` : '1px solid transparent' }}
-          onClick={() => setSection('sec-mod-items')}>
-          <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>✏️</span>
-          Modificadores
-        </div>
+        {renderSidebarItem('sec-categorias', 'Categorías', '🗂️', false, false)}
+        {renderSidebarItem('sec-subgrupos', 'Sub-grupos', '📐', true, false)}
+        {renderSidebarItem('sec-items', 'Ítems / Platos', '🍽️', false, false)}
+        {renderSidebarItem('sec-mod-grupos', 'Grupos de Mods', '🔧', true, false)}
+        {renderSidebarItem('sec-mod-items', 'Modificadores', '✏️', true, false)}
       </div>
 
       <div style={{ padding: '6px 8px 2px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', color: section === 'sec-inventario' ? styles.orange : styles.textMid, fontSize: 12, fontWeight: 500, marginBottom: 1 }}
-          onClick={() => setSection('sec-inventario')}>
-          <span style={{ fontSize: 16, marginRight: 8 }}>📦</span>
-          Inventario
-        </div>
+        {renderSidebarItem('sec-inventario', 'Inventario', '📦', true, false)}
       </div>
 
       <div style={{ padding: '6px 8px 2px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', color: section === 'sec-reportes' ? styles.orange : styles.textMid, fontSize: 12, fontWeight: 500, marginBottom: 1, background: section === 'sec-reportes' ? styles.orangeDim : 'transparent', border: section === 'sec-reportes' ? `1px solid ${styles.orangeB}` : '1px solid transparent' }}
-          onClick={() => setSection('sec-reportes')}>
-          <span style={{ fontSize: 16, marginRight: 8 }}>📊</span>
-          Reportes
-        </div>
+        {renderSidebarItem('sec-reportes', 'Reportes', '📊', false, false)}
       </div>
 
       <div style={{ padding: '6px 8px 2px' }}>
@@ -205,23 +367,9 @@ export function AdminPanel({ license }: { license: License }) {
           👥 Clientes
         </div>
         
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px 8px 18px', borderRadius: 6, cursor: 'pointer', color: styles.textMid, fontSize: 12, fontWeight: 500, marginBottom: 1 }}
-          onClick={() => setSection('sec-clientes')}>
-          <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>👥</span>
-          Directorio
-        </div>
-        
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px 8px 18px', borderRadius: 6, cursor: 'pointer', color: styles.textMid, fontSize: 12, fontWeight: 500, marginBottom: 1 }}
-          onClick={() => setSection('sec-cxc')}>
-          <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>💳</span>
-          CxC — Créditos
-        </div>
-        
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px 8px 18px', borderRadius: 6, cursor: 'pointer', color: styles.textMid, fontSize: 12, fontWeight: 500, marginBottom: 1 }}
-          onClick={() => setSection('sec-fidelizacion')}>
-          <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>⭐</span>
-          Fidelización
-        </div>
+        {renderSidebarItem('sec-clientes', 'Directorio', '👥', true, true)}
+        {renderSidebarItem('sec-cxc', 'CxC — Créditos', '💳', true, true)}
+        {renderSidebarItem('sec-fidelizacion', 'Fidelización', '⭐', true, true)}
       </div>
 
       <div style={{ padding: '6px 8px 2px' }}>
@@ -229,23 +377,9 @@ export function AdminPanel({ license }: { license: License }) {
           ⚙️ Sistema
         </div>
         
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', color: section === 'sec-usuarios' ? styles.orange : styles.textMid, fontSize: 12, fontWeight: 500, marginBottom: 1, background: section === 'sec-usuarios' ? styles.orangeDim : 'transparent', border: section === 'sec-usuarios' ? `1px solid ${styles.orangeB}` : '1px solid transparent' }}
-          onClick={() => setSection('sec-usuarios')}>
-          <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>👥</span>
-          Usuarios
-        </div>
-        
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', color: section === 'sec-permisos' ? styles.orange : styles.textMid, fontSize: 12, fontWeight: 500, marginBottom: 1, background: section === 'sec-permisos' ? styles.orangeDim : 'transparent', border: section === 'sec-permisos' ? `1px solid ${styles.orangeB}` : '1px solid transparent' }}
-          onClick={() => setSection('sec-permisos')}>
-          <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>🔐</span>
-          Permisos
-        </div>
-        
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', color: section === 'sec-auditoria' ? styles.orange : styles.textMid, fontSize: 12, fontWeight: 500, marginBottom: 1, background: section === 'sec-auditoria' ? styles.orangeDim : 'transparent', border: section === 'sec-auditoria' ? `1px solid ${styles.orangeB}` : '1px solid transparent' }}
-          onClick={() => setSection('sec-auditoria')}>
-          <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>📜</span>
-          Auditoría
-        </div>
+        {renderSidebarItem('sec-usuarios', 'Usuarios', '👥', false, false)}
+        {renderSidebarItem('sec-permisos', 'Permisos', '🔐', true, false)}
+        {renderSidebarItem('sec-auditoria', 'Auditoría', '📜', true, false)}
       </div>
 
       <div style={{ padding: '6px 8px 2px' }}>
@@ -253,35 +387,11 @@ export function AdminPanel({ license }: { license: License }) {
           🔩 Configuración
         </div>
         
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', color: section === 'sec-general' ? styles.orange : styles.textMid, fontSize: 12, fontWeight: 500, marginBottom: 1, background: section === 'sec-general' ? styles.orangeDim : 'transparent', border: section === 'sec-general' ? `1px solid ${styles.orangeB}` : '1px solid transparent' }}
-          onClick={() => setSection('sec-general')}>
-          <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>⚙️</span>
-          General
-        </div>
-        
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', color: section === 'sec-moneda' ? styles.orange : styles.textMid, fontSize: 12, fontWeight: 500, marginBottom: 1, background: section === 'sec-moneda' ? styles.orangeDim : 'transparent', border: section === 'sec-moneda' ? `1px solid ${styles.orangeB}` : '1px solid transparent' }}
-          onClick={() => setSection('sec-moneda')}>
-          <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>💱</span>
-          Moneda / Tasa
-        </div>
-        
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', color: section === 'sec-metodos' ? styles.orange : styles.textMid, fontSize: 12, fontWeight: 500, marginBottom: 1, background: section === 'sec-metodos' ? styles.orangeDim : 'transparent', border: section === 'sec-metodos' ? `1px solid ${styles.orangeB}` : '1px solid transparent' }}
-          onClick={() => setSection('sec-metodos')}>
-          <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>💳</span>
-          Métodos de Pago
-        </div>
-        
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', color: section === 'sec-impuestos' ? styles.orange : styles.textMid, fontSize: 12, fontWeight: 500, marginBottom: 1, background: section === 'sec-impuestos' ? styles.orangeDim : 'transparent', border: section === 'sec-impuestos' ? `1px solid ${styles.orangeB}` : '1px solid transparent' }}
-          onClick={() => setSection('sec-impuestos')}>
-          <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>📊</span>
-          Impuestos
-        </div>
-        
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', color: section === 'sec-pos' ? styles.orange : styles.textMid, fontSize: 12, fontWeight: 500, marginBottom: 1, background: section === 'sec-pos' ? styles.orangeDim : 'transparent', border: section === 'sec-pos' ? `1px solid ${styles.orangeB}` : '1px solid transparent' }}
-          onClick={() => setSection('sec-pos')}>
-          <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>🖥️</span>
-          Punto de Venta
-        </div>
+        {renderSidebarItem('sec-general', 'General', '⚙️', false, false)}
+        {renderSidebarItem('sec-moneda', 'Moneda / Tasa', '💱', true, false)}
+        {renderSidebarItem('sec-metodos', 'Métodos de Pago', '💳', true, false)}
+        {renderSidebarItem('sec-impuestos', 'Impuestos', '📊', true, false)}
+        {renderSidebarItem('sec-pos', 'Punto de Venta', '🖥️', false, false)}
       </div>
     </div>
   )
@@ -301,7 +411,7 @@ export function AdminPanel({ license }: { license: License }) {
             <div style={{ fontSize: 12, fontWeight: 700, color: styles.text }}>Categorías activas</div>
             <div style={{ fontSize: 10, color: styles.textDim }}>Click para editar · arrastra para reordenar</div>
           </div>
-          <button style={{ padding: '4px 9px', borderRadius: 7, border: 'none', background: styles.orange, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+          <button onClick={() => openCategoryModal()} style={{ padding: '4px 9px', borderRadius: 7, border: 'none', background: styles.orange, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
             + Nueva categoría
           </button>
         </div>
@@ -312,7 +422,7 @@ export function AdminPanel({ license }: { license: License }) {
             </div>
           ) : (
             categories.filter(c => c.activo).map(cat => (
-              <div key={cat.id} style={{ background: styles.surface2, border: `1px solid ${styles.border}`, borderRadius: 10, padding: 12, cursor: 'pointer', transition: 'all 0.13s', textAlign: 'center' }}>
+              <div key={cat.id} onClick={() => openCategoryModal(cat)} style={{ background: styles.surface2, border: `1px solid ${styles.border}`, borderRadius: 10, padding: 12, cursor: 'pointer', transition: 'all 0.13s', textAlign: 'center' }}>
                 <div style={{ fontSize: 32, marginBottom: 6, lineHeight: 1 }}>{cat.emoji || '🍽️'}</div>
                 <div style={{ fontSize: 12, fontWeight: 700, color: styles.text }}>{cat.nombre}</div>
                 <div style={{ fontSize: 9, color: styles.textDim, fontFamily: 'DM Mono, monospace', marginTop: 2 }}>#{cat.orden}</div>
@@ -351,7 +461,7 @@ export function AdminPanel({ license }: { license: License }) {
             <div style={{ fontSize: 12, fontWeight: 700, color: styles.text }}>Sub-grupos configurados</div>
             <div style={{ fontSize: 10, color: styles.textDim }}>{subGrupos.length} sub-grupos</div>
           </div>
-          <button style={{ padding: '4px 9px', borderRadius: 7, border: 'none', background: styles.orange, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+          <button onClick={() => openSubGrupoModal()} style={{ padding: '4px 9px', borderRadius: 7, border: 'none', background: styles.orange, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
             + Nuevo sub-grupo
           </button>
         </div>
@@ -405,7 +515,7 @@ export function AdminPanel({ license }: { license: License }) {
             ))}
           </div>
           <input placeholder="Buscar plato..." style={{ padding: '5px 8px', borderRadius: 6, border: `1px solid ${styles.border}`, background: styles.surface, color: styles.text, fontSize: 11, fontFamily: 'DM Mono, monospace', width: 160 }} />
-          <button style={{ padding: '4px 9px', borderRadius: 7, border: 'none', background: styles.orange, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+          <button onClick={() => openItemModal()} style={{ padding: '4px 9px', borderRadius: 7, border: 'none', background: styles.orange, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
             + Nuevo ítem
           </button>
         </div>
@@ -439,7 +549,9 @@ export function AdminPanel({ license }: { license: License }) {
                         {item.activo ? 'ACTIVO' : 'INACTIVO'}
                       </span>
                     </td>
-                    <td style={{ padding: '9px 12px', fontSize: 12, color: styles.textMid }}>✏️</td>
+                    <td style={{ padding: '9px 12px', fontSize: 12, color: styles.textMid }}>
+                      <button onClick={() => openItemModal(item)} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}>✏️</button>
+                    </td>
                   </tr>
                 ))
               )}
@@ -465,7 +577,7 @@ export function AdminPanel({ license }: { license: License }) {
             <div style={{ fontSize: 12, fontWeight: 700, color: styles.text }}>Grupos</div>
             <div style={{ fontSize: 10, color: styles.textDim }}>{modGrupos.length} grupos</div>
           </div>
-          <button style={{ padding: '4px 9px', borderRadius: 7, border: 'none', background: styles.orange, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+          <button onClick={() => openModGrupoModal()} style={{ padding: '4px 9px', borderRadius: 7, border: 'none', background: styles.orange, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
             + Nuevo grupo
           </button>
         </div>
@@ -525,7 +637,7 @@ export function AdminPanel({ license }: { license: License }) {
             <div style={{ fontSize: 12, fontWeight: 700, color: styles.text }}>Modificadores</div>
             <div style={{ fontSize: 10, color: styles.textDim }}>{modificadores.length} total</div>
           </div>
-          <button style={{ padding: '4px 9px', borderRadius: 7, border: 'none', background: styles.orange, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+          <button onClick={() => openModificadorModal()} style={{ padding: '4px 9px', borderRadius: 7, border: 'none', background: styles.orange, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
             + Nuevo modificador
           </button>
         </div>
@@ -546,14 +658,16 @@ export function AdminPanel({ license }: { license: License }) {
               modificadores.map(m => (
                 <tr key={m.id} style={{ borderBottom: `1px solid ${styles.border}` }}>
                   <td style={{ padding: '9px 12px', fontSize: 12, color: styles.textMid }}>{m.nombre}</td>
-                  <td style={{ padding: '9px 12px', fontSize: 12, color: styles.textMid }}>{modGrupos.find(g => g.id === m.grupoId)?.nombre || '—'}</td>
-                  <td style={{ padding: '9px 12px', fontSize: 12, color: styles.blue, textAlign: 'right', fontFamily: 'DM Mono, monospace' }}>{m.precioAdicional > 0 ? `+$${m.precioAdicional.toFixed(2)}` : '—'}</td>
+                  <td style={{ padding: '9px 12px', fontSize: 12, color: styles.textMid }}>{modGrupos.find(g => g.id === m.grupo_id)?.nombre || '—'}</td>
+                  <td style={{ padding: '9px 12px', fontSize: 12, color: styles.blue, textAlign: 'right', fontFamily: 'DM Mono, monospace' }}>{m.precio_adicional > 0 ? `+$${m.precio_adicional.toFixed(2)}` : '—'}</td>
                   <td style={{ padding: '9px 12px', fontSize: 12 }}>
                     <span style={{ display: 'inline-flex', alignItems: 'center', fontSize: 10, fontFamily: 'DM Mono, monospace', padding: '2px 7px', borderRadius: 5, fontWeight: 600, background: m.activo ? styles.greenDim : styles.redDim, color: m.activo ? styles.green : styles.red, border: `1px solid ${m.activo ? styles.greenB : styles.redB}` }}>
                       {m.activo ? 'ACTIVO' : 'INACTIVO'}
                     </span>
                   </td>
-                  <td style={{ padding: '9px 12px', fontSize: 12, color: styles.textMid }}>✏️</td>
+                  <td style={{ padding: '9px 12px', fontSize: 12, color: styles.textMid }}>
+                    <button onClick={() => openModificadorModal(m)} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}>✏️</button>
+                  </td>
                 </tr>
               ))
             )}
@@ -771,6 +885,48 @@ export function AdminPanel({ license }: { license: License }) {
     </div>
   )
 
+  const renderMetodos = () => (
+    <div>
+      <div style={{ fontFamily: 'Fraunces, serif', fontSize: 20, fontWeight: 700, color: styles.text, marginBottom: 3 }}>
+        Métodos de Pago
+      </div>
+      <div style={{ fontSize: 11, color: styles.textDim, fontFamily: 'DM Mono, monospace', marginBottom: 16 }}>
+        Configura los medios que aceptas en el POS · efectivo · digital · crédito
+      </div>
+      
+      <div style={{ background: styles.surface, border: `1px solid ${styles.border}`, borderRadius: 10, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 14px', borderBottom: `1px solid ${styles.border}`, flexWrap: 'wrap', gap: 8 }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: styles.text }}>Métodos habilitados</div>
+            <div style={{ fontSize: 10, color: styles.textDim }}>{metodosPago.length} métodos</div>
+          </div>
+          <button onClick={() => openMetodoModal()} style={{ padding: '4px 9px', borderRadius: 7, border: 'none', background: styles.orange, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+            + Nuevo método
+          </button>
+        </div>
+        <div style={{ padding: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
+          {metodosPago.length === 0 ? (
+            <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: 20, color: styles.textDim, fontFamily: 'DM Mono, monospace', fontSize: 11 }}>
+              No hay métodos de pago configurados.
+            </div>
+          ) : (
+            metodosPago.map(m => (
+              <div key={m.id} onClick={() => openMetodoModal(m)} style={{ background: styles.surface2, border: `1px solid ${styles.border}`, borderRadius: 10, padding: 12, cursor: 'pointer', transition: 'all 0.13s' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ fontSize: 24 }}>{m.emoji || '💵'}</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: styles.text }}>{m.label}</div>
+                    <div style={{ fontSize: 9, color: styles.textDim, fontFamily: 'DM Mono, monospace', textTransform: 'uppercase' }}>{m.moneda} · {m.active ? 'ACTIVO' : 'INACTIVO'}</div>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  )
+
   const renderGeneral = () => (
     <div>
       <div style={{ fontFamily: 'Fraunces, serif', fontSize: 20, fontWeight: 700, color: styles.text, marginBottom: 3 }}>
@@ -919,7 +1075,7 @@ export function AdminPanel({ license }: { license: License }) {
       case 'sec-cxc':
       case 'sec-fidelizacion':
       case 'sec-moneda':
-      case 'sec-metodos':
+      case 'sec-metodos': return renderMetodos()
       case 'sec-impuestos':
       case 'sec-pos':
       default:
@@ -983,6 +1139,378 @@ export function AdminPanel({ license }: { license: License }) {
           {renderContent()}
         </div>
       </div>
+      
+      {/* UPGRADE MODAL */}
+      {showUpgradeModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: styles.surface, border: `1px solid ${styles.orange}`, borderRadius: 12, padding: 30, maxWidth: 400, textAlign: 'center' }}>
+            <div style={{ fontSize: 40, marginBottom: 10 }}>🔒</div>
+            <div style={{ fontFamily: 'Fraunces, serif', fontSize: 20, fontWeight: 700, color: styles.text, marginBottom: 10 }}>Función Bloqueada</div>
+            <div style={{ fontSize: 13, color: styles.textMid, marginBottom: 24, lineHeight: 1.5 }}>
+              Esta función avanzada requiere el plan <b>Pro</b>. Para actualizar su suscripción y desbloquear todas las herramientas, contacte a soporte técnico.
+            </div>
+            <div style={{ background: styles.surface2, border: `1px solid ${styles.border}`, borderRadius: 8, padding: 12, marginBottom: 24 }}>
+              <div style={{ fontSize: 11, fontFamily: 'DM Mono, monospace', color: styles.textDim, marginBottom: 4, letterSpacing: 1, textTransform: 'uppercase' }}>WhatsApp Soporte</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: styles.orange }}>+1 (786) 896-4162</div>
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button 
+                onClick={() => setShowUpgradeModal(false)}
+                style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: `1px solid ${styles.border}`, background: 'transparent', color: styles.textMid, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+              >
+                Volver
+              </button>
+              <a 
+                href="https://wa.me/17868964162" target="_blank" rel="noopener noreferrer"
+                style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: 'none', background: styles.green, color: '#000', fontSize: 12, fontWeight: 800, cursor: 'pointer', textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                Contactar
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showItemModal && editingItem && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }} onClick={() => setShowItemModal(false)} />
+          <div style={{ position: 'relative', width: '100%', maxWidth: 400, background: styles.surface, borderRadius: 16, border: `1px solid ${styles.border}`, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.4)', animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)' }}>
+            <div style={{ padding: '20px 24px', borderBottom: `1px solid ${styles.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 16, fontFamily: 'Fraunces, serif', color: styles.text }}>{editingItem.id ? 'Editar Ítem' : 'Nuevo Ítem'}</h3>
+                <p style={{ margin: 0, fontSize: 11, color: styles.textDim, fontFamily: 'DM Mono, monospace', marginTop: 2 }}>Configuración de plato o producto</p>
+              </div>
+              <button onClick={() => setShowItemModal(false)} style={{ background: styles.surface2, border: `1px solid ${styles.border}`, color: styles.text, width: 32, height: 32, borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>×</button>
+            </div>
+            
+            <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: 10, color: styles.textDim, fontFamily: 'DM Mono, monospace', letterSpacing: 1, marginBottom: 6 }}>NOMBRE</label>
+                  <input 
+                    value={editingItem.nombre || ''} 
+                    onChange={e => setEditingItem({ ...editingItem, nombre: e.target.value })} 
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', background: styles.surface2, border: `1px solid ${styles.border}`, borderRadius: 8, color: styles.text, fontSize: 14 }} 
+                    placeholder="Ej. Pizza Margarita"
+                  />
+                </div>
+                <div style={{ width: 60 }}>
+                  <label style={{ display: 'block', fontSize: 10, color: styles.textDim, fontFamily: 'DM Mono, monospace', letterSpacing: 1, marginBottom: 6 }}>EMOJI</label>
+                  <input 
+                    value={editingItem.emoji || ''} 
+                    onChange={e => setEditingItem({ ...editingItem, emoji: e.target.value })} 
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '10px 0', textAlign: 'center', background: styles.surface2, border: `1px solid ${styles.border}`, borderRadius: 8, color: styles.text, fontSize: 20 }} 
+                  />
+                </div>
+              </div>
+              
+              <div style={{ display: 'flex', gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: 10, color: styles.textDim, fontFamily: 'DM Mono, monospace', letterSpacing: 1, marginBottom: 6 }}>CATEGORÍA</label>
+                  <select 
+                    value={editingItem.cat || ''} 
+                    onChange={e => setEditingItem({ ...editingItem, cat: e.target.value })}
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', background: styles.surface2, border: `1px solid ${styles.border}`, borderRadius: 8, color: styles.text, fontSize: 14, appearance: 'none' }}
+                  >
+                    <option value="">Selecciona una...</option>
+                    {categories.map(c => <option key={c.id} value={c.id}>{c.emoji} {c.nombre}</option>)}
+                  </select>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: 10, color: styles.textDim, fontFamily: 'DM Mono, monospace', letterSpacing: 1, marginBottom: 6 }}>PRECIO ($)</label>
+                  <input 
+                    type="number" step="0.01"
+                    value={editingItem.precio === 0 ? '' : editingItem.precio} 
+                    onChange={e => setEditingItem({ ...editingItem, precio: parseFloat(e.target.value) || 0 })} 
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', background: styles.surface2, border: `1px solid ${styles.border}`, borderRadius: 8, color: styles.orange, fontSize: 14, fontWeight: 'bold' }} 
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+              
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: styles.surface2, borderRadius: 8, border: `1px solid ${styles.border}` }}>
+                <div>
+                  <div style={{ fontSize: 13, color: styles.text, fontWeight: 600 }}>Ítem Activo</div>
+                  <div style={{ fontSize: 10, color: styles.textDim, fontFamily: 'DM Mono, monospace' }}>Mostrar en el POS para la venta</div>
+                </div>
+                <div 
+                  onClick={() => setEditingItem({ ...editingItem, activo: !editingItem.activo })}
+                  style={{ width: 40, height: 22, borderRadius: 11, background: editingItem.activo ? styles.orange : styles.border, position: 'relative', cursor: 'pointer', transition: '0.2s' }}
+                >
+                  <div style={{ width: 18, height: 18, borderRadius: 9, background: '#fff', position: 'absolute', top: 2, left: editingItem.activo ? 20 : 2, transition: '0.2s', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }} />
+                </div>
+              </div>
+            </div>
+
+            <div style={{ padding: '16px 24px', borderTop: `1px solid ${styles.border}`, background: styles.surface2, display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+              <button onClick={() => setShowItemModal(false)} style={{ padding: '8px 16px', borderRadius: 8, border: `1px solid ${styles.border}`, background: 'transparent', color: styles.text, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={saveItem} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: styles.orange, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', boxShadow: `0 4px 12px ${styles.orangeDim}` }}>Guardar Ítem</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showModGrupoModal && editingModGrupo && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }} onClick={() => setShowModGrupoModal(false)} />
+          <div style={{ position: 'relative', width: '100%', maxWidth: 400, background: styles.surface, borderRadius: 16, border: `1px solid ${styles.border}`, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.4)', animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)' }}>
+            <div style={{ padding: '20px 24px', borderBottom: `1px solid ${styles.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 16, fontFamily: 'Fraunces, serif', color: styles.text }}>{editingModGrupo.id ? 'Editar Grupo' : 'Nuevo Grupo'}</h3>
+                <p style={{ margin: 0, fontSize: 11, color: styles.textDim, fontFamily: 'DM Mono, monospace', marginTop: 2 }}>Grupo de modificadores</p>
+              </div>
+              <button onClick={() => setShowModGrupoModal(false)} style={{ background: styles.surface2, border: `1px solid ${styles.border}`, color: styles.text, width: 32, height: 32, borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>×</button>
+            </div>
+            
+            <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 10, color: styles.textDim, fontFamily: 'DM Mono, monospace', letterSpacing: 1, marginBottom: 6 }}>NOMBRE DEL GRUPO</label>
+                <input 
+                  value={editingModGrupo.nombre || ''} 
+                  onChange={e => setEditingModGrupo({ ...editingModGrupo, nombre: e.target.value })} 
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', background: styles.surface2, border: `1px solid ${styles.border}`, borderRadius: 8, color: styles.text, fontSize: 14 }} 
+                  placeholder="Ej. Elige tu Contorno"
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: 10, color: styles.textDim, fontFamily: 'DM Mono, monospace', letterSpacing: 1, marginBottom: 6 }}>COMPORTAMIENTO / TIPO</label>
+                <select 
+                  value={editingModGrupo.tipo || ''} 
+                  onChange={e => setEditingModGrupo({ ...editingModGrupo, tipo: e.target.value as any })}
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', background: styles.surface2, border: `1px solid ${styles.border}`, borderRadius: 8, color: styles.text, fontSize: 14, appearance: 'none' }}
+                >
+                  <option value="contorno">Requerido (Contornos forzados)</option>
+                  <option value="extra">Opcional (Extras con Precio)</option>
+                  <option value="sin">Opcional (Sin Aderezos)</option>
+                  <option value="seleccion">Libre Selección (Toppings)</option>
+                </select>
+              </div>
+              
+              <div style={{ display: 'flex', gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: 10, color: styles.textDim, fontFamily: 'DM Mono, monospace', letterSpacing: 1, marginBottom: 6 }}>MÍNIMO</label>
+                  <input 
+                    type="number"
+                    value={editingModGrupo.min_selections} 
+                    onChange={e => setEditingModGrupo({ ...editingModGrupo, min_selections: parseInt(e.target.value) || 0 })} 
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', background: styles.surface2, border: `1px solid ${styles.border}`, borderRadius: 8, color: styles.text, fontSize: 14 }} 
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: 10, color: styles.textDim, fontFamily: 'DM Mono, monospace', letterSpacing: 1, marginBottom: 6 }}>MÁXIMO</label>
+                  <input 
+                    type="number"
+                    value={editingModGrupo.max_selections} 
+                    onChange={e => setEditingModGrupo({ ...editingModGrupo, max_selections: parseInt(e.target.value) || 1 })} 
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', background: styles.surface2, border: `1px solid ${styles.border}`, borderRadius: 8, color: styles.text, fontSize: 14 }} 
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div style={{ padding: '16px 24px', borderTop: `1px solid ${styles.border}`, background: styles.surface2, display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+              <button onClick={() => setShowModGrupoModal(false)} style={{ padding: '8px 16px', borderRadius: 8, border: `1px solid ${styles.border}`, background: 'transparent', color: styles.text, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={saveModGrupo} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: styles.orange, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', boxShadow: `0 4px 12px ${styles.orangeDim}` }}>Guardar Grupo</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showModificadorModal && editingModificador && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }} onClick={() => setShowModificadorModal(false)} />
+          <div style={{ position: 'relative', width: '100%', maxWidth: 400, background: styles.surface, borderRadius: 16, border: `1px solid ${styles.border}`, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.4)', animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)' }}>
+            <div style={{ padding: '20px 24px', borderBottom: `1px solid ${styles.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 16, fontFamily: 'Fraunces, serif', color: styles.text }}>{editingModificador.id ? 'Editar Modificador' : 'Nuevo Modificador'}</h3>
+                <p style={{ margin: 0, fontSize: 11, color: styles.textDim, fontFamily: 'DM Mono, monospace', marginTop: 2 }}>Elemento opcional o extra</p>
+              </div>
+              <button onClick={() => setShowModificadorModal(false)} style={{ background: styles.surface2, border: `1px solid ${styles.border}`, color: styles.text, width: 32, height: 32, borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>×</button>
+            </div>
+            
+            <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 10, color: styles.textDim, fontFamily: 'DM Mono, monospace', letterSpacing: 1, marginBottom: 6 }}>NOMBRE DEL MODIFICADOR</label>
+                <input 
+                  value={editingModificador.nombre || ''} 
+                  onChange={e => setEditingModificador({ ...editingModificador, nombre: e.target.value })} 
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', background: styles.surface2, border: `1px solid ${styles.border}`, borderRadius: 8, color: styles.text, fontSize: 14 }} 
+                  placeholder="Ej. Queso Extra"
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: 10, color: styles.textDim, fontFamily: 'DM Mono, monospace', letterSpacing: 1, marginBottom: 6 }}>GRUPO AL QUE PERTENECE</label>
+                  <select 
+                    value={editingModificador.grupo_id || ''} 
+                    onChange={e => setEditingModificador({ ...editingModificador, grupo_id: e.target.value })}
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', background: styles.surface2, border: `1px solid ${styles.border}`, borderRadius: 8, color: styles.text, fontSize: 14, appearance: 'none' }}
+                  >
+                    <option value="">Selecciona uno...</option>
+                    {modGrupos.map(g => <option key={g.id} value={g.id}>{g.nombre}</option>)}
+                  </select>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: 10, color: styles.textDim, fontFamily: 'DM Mono, monospace', letterSpacing: 1, marginBottom: 6 }}>PRECIO ADIC. ($)</label>
+                  <input 
+                    type="number" step="0.01"
+                    value={editingModificador.precio_adicional === 0 ? '' : editingModificador.precio_adicional} 
+                    onChange={e => setEditingModificador({ ...editingModificador, precio_adicional: parseFloat(e.target.value) || 0 })} 
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', background: styles.surface2, border: `1px solid ${styles.border}`, borderRadius: 8, color: styles.blue, fontSize: 14, fontWeight: 'bold' }} 
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: styles.surface2, borderRadius: 8, border: `1px solid ${styles.border}` }}>
+                <div>
+                  <div style={{ fontSize: 13, color: styles.text, fontWeight: 600 }}>Disponible</div>
+                  <div style={{ fontSize: 10, color: styles.textDim, fontFamily: 'DM Mono, monospace' }}>Mostrar en el tablet del mesero</div>
+                </div>
+                <div 
+                  onClick={() => setEditingModificador({ ...editingModificador, activo: !editingModificador.activo })}
+                  style={{ width: 40, height: 22, borderRadius: 11, background: editingModificador.activo ? styles.orange : styles.border, position: 'relative', cursor: 'pointer', transition: '0.2s' }}
+                >
+                  <div style={{ width: 18, height: 18, borderRadius: 9, background: '#fff', position: 'absolute', top: 2, left: editingModificador.activo ? 20 : 2, transition: '0.2s', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }} />
+                </div>
+              </div>
+            </div>
+
+            <div style={{ padding: '16px 24px', borderTop: `1px solid ${styles.border}`, background: styles.surface2, display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+              <button onClick={() => setShowModificadorModal(false)} style={{ padding: '8px 16px', borderRadius: 8, border: `1px solid ${styles.border}`, background: 'transparent', color: styles.text, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={saveModificador} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: styles.orange, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', boxShadow: `0 4px 12px ${styles.orangeDim}` }}>Guardar Modificador</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCategoryModal && editingCategory && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }} onClick={() => setShowCategoryModal(false)} />
+          <div style={{ position: 'relative', width: '100%', maxWidth: 400, background: styles.surface, borderRadius: 16, border: `1px solid ${styles.border}`, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.4)', animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)' }}>
+            <div style={{ padding: '20px 24px', borderBottom: `1px solid ${styles.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 16, fontFamily: 'Fraunces, serif', color: styles.text }}>{editingCategory.id ? 'Editar Categoría' : 'Nueva Categoría'}</h3>
+              </div>
+              <button onClick={() => setShowCategoryModal(false)} style={{ background: styles.surface2, border: `1px solid ${styles.border}`, color: styles.text, width: 32, height: 32, borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>×</button>
+            </div>
+            <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: 10, color: styles.textDim, fontFamily: 'DM Mono, monospace', letterSpacing: 1, marginBottom: 6 }}>NOMBRE</label>
+                  <input value={editingCategory.nombre || ''} onChange={e => setEditingCategory({ ...editingCategory, nombre: e.target.value })} style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', background: styles.surface2, border: `1px solid ${styles.border}`, borderRadius: 8, color: styles.text, fontSize: 14 }} placeholder="Pizzas" />
+                </div>
+                <div style={{ width: 60 }}>
+                  <label style={{ display: 'block', fontSize: 10, color: styles.textDim, fontFamily: 'DM Mono, monospace', letterSpacing: 1, marginBottom: 6 }}>EMOJI</label>
+                  <input value={editingCategory.emoji || ''} onChange={e => setEditingCategory({ ...editingCategory, emoji: e.target.value })} style={{ width: '100%', boxSizing: 'border-box', padding: '10px 0', textAlign: 'center', background: styles.surface2, border: `1px solid ${styles.border}`, borderRadius: 8, color: styles.text, fontSize: 20 }} />
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: 10, color: styles.textDim, fontFamily: 'DM Mono, monospace', letterSpacing: 1, marginBottom: 6 }}>ORDEN / POSICIÓN</label>
+                  <input type="number" value={editingCategory.orden} onChange={e => setEditingCategory({ ...editingCategory, orden: parseInt(e.target.value) || 0 })} style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', background: styles.surface2, border: `1px solid ${styles.border}`, borderRadius: 8, color: styles.text, fontSize: 14 }} />
+                </div>
+              </div>
+            </div>
+            <div style={{ padding: '16px 24px', borderTop: `1px solid ${styles.border}`, background: styles.surface2, display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+              <button onClick={() => setShowCategoryModal(false)} style={{ padding: '8px 16px', borderRadius: 8, border: `1px solid ${styles.border}`, background: 'transparent', color: styles.text, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={saveCategory} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: styles.orange, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Guardar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showSubGrupoModal && editingSubGrupo && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }} onClick={() => setShowSubGrupoModal(false)} />
+          <div style={{ position: 'relative', width: '100%', maxWidth: 400, background: styles.surface, borderRadius: 16, border: `1px solid ${styles.border}`, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.4)', animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)' }}>
+            <div style={{ padding: '20px 24px', borderBottom: `1px solid ${styles.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 16, fontFamily: 'Fraunces, serif', color: styles.text }}>{editingSubGrupo.id ? 'Editar Sub-grupo' : 'Nuevo Sub-grupo'}</h3>
+              </div>
+              <button onClick={() => setShowSubGrupoModal(false)} style={{ background: styles.surface2, border: `1px solid ${styles.border}`, color: styles.text, width: 32, height: 32, borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>×</button>
+            </div>
+            <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: 10, color: styles.textDim, fontFamily: 'DM Mono, monospace', letterSpacing: 1, marginBottom: 6 }}>NOMBRE</label>
+                  <input value={editingSubGrupo.nombre || ''} onChange={e => setEditingSubGrupo({ ...editingSubGrupo, nombre: e.target.value })} style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', background: styles.surface2, border: `1px solid ${styles.border}`, borderRadius: 8, color: styles.text, fontSize: 14 }} placeholder="Mediana" />
+                </div>
+                <div style={{ width: 60 }}>
+                  <label style={{ display: 'block', fontSize: 10, color: styles.textDim, fontFamily: 'DM Mono, monospace', letterSpacing: 1, marginBottom: 6 }}>EMOJI</label>
+                  <input value={editingSubGrupo.emoji || ''} onChange={e => setEditingSubGrupo({ ...editingSubGrupo, emoji: e.target.value })} style={{ width: '100%', boxSizing: 'border-box', padding: '10px 0', textAlign: 'center', background: styles.surface2, border: `1px solid ${styles.border}`, borderRadius: 8, color: styles.text, fontSize: 20 }} />
+                </div>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 10, color: styles.textDim, fontFamily: 'DM Mono, monospace', letterSpacing: 1, marginBottom: 6 }}>CATEGORÍA PADRE</label>
+                <select value={editingSubGrupo.categoria_id || ''} onChange={e => setEditingSubGrupo({ ...editingSubGrupo, categoria_id: e.target.value })} style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', background: styles.surface2, border: `1px solid ${styles.border}`, borderRadius: 8, color: styles.text, fontSize: 14, appearance: 'none' }}>
+                  <option value="">Selecciona una...</option>
+                  {categories.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                </select>
+              </div>
+            </div>
+            <div style={{ padding: '16px 24px', borderTop: `1px solid ${styles.border}`, background: styles.surface2, display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+              <button onClick={() => setShowSubGrupoModal(false)} style={{ padding: '8px 16px', borderRadius: 8, border: `1px solid ${styles.border}`, background: 'transparent', color: styles.text, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={saveSubGrupo} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: styles.orange, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Guardar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showMetodoModal && editingMetodo && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }} onClick={() => setShowMetodoModal(false)} />
+          <div style={{ position: 'relative', width: '100%', maxWidth: 400, background: styles.surface, borderRadius: 16, border: `1px solid ${styles.border}`, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.4)', animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)' }}>
+            <div style={{ padding: '20px 24px', borderBottom: `1px solid ${styles.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 16, fontFamily: 'Fraunces, serif', color: styles.text }}>{editingMetodo.id ? 'Editar Método' : 'Nuevo Método de Pago'}</h3>
+              </div>
+              <button onClick={() => setShowMetodoModal(false)} style={{ background: styles.surface2, border: `1px solid ${styles.border}`, color: styles.text, width: 32, height: 32, borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>×</button>
+            </div>
+            <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: 10, color: styles.textDim, fontFamily: 'DM Mono, monospace', letterSpacing: 1, marginBottom: 6 }}>ETIQUETA (LABEL)</label>
+                  <input value={editingMetodo.label || ''} onChange={e => setEditingMetodo({ ...editingMetodo, label: e.target.value })} style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', background: styles.surface2, border: `1px solid ${styles.border}`, borderRadius: 8, color: styles.text, fontSize: 14 }} placeholder="Zelle" />
+                </div>
+                <div style={{ width: 60 }}>
+                  <label style={{ display: 'block', fontSize: 10, color: styles.textDim, fontFamily: 'DM Mono, monospace', letterSpacing: 1, marginBottom: 6 }}>EMOJI</label>
+                  <input value={editingMetodo.emoji || ''} onChange={e => setEditingMetodo({ ...editingMetodo, emoji: e.target.value })} style={{ width: '100%', boxSizing: 'border-box', padding: '10px 0', textAlign: 'center', background: styles.surface2, border: `1px solid ${styles.border}`, borderRadius: 8, color: styles.text, fontSize: 20 }} />
+                </div>
+              </div>
+              
+              <div style={{ display: 'flex', gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: 10, color: styles.textDim, fontFamily: 'DM Mono, monospace', letterSpacing: 1, marginBottom: 6 }}>IDENTIFICADOR ÚNICO</label>
+                  <input value={editingMetodo.identificador || ''} onChange={e => setEditingMetodo({ ...editingMetodo, identificador: e.target.value })} style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', background: styles.surface2, border: `1px solid ${styles.border}`, borderRadius: 8, color: styles.text, fontSize: 14 }} placeholder="zelle-main" />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: 10, color: styles.textDim, fontFamily: 'DM Mono, monospace', letterSpacing: 1, marginBottom: 6 }}>MONEDA</label>
+                  <select value={editingMetodo.moneda || 'usd'} onChange={e => setEditingMetodo({ ...editingMetodo, moneda: e.target.value as any })} style={{ width: '100%', boxSizing: 'border-box', padding: '12px 12px', background: styles.surface2, border: `1px solid ${styles.border}`, borderRadius: 8, color: styles.text, fontSize: 13, appearance: 'none' }}>
+                    <option value="usd">Dólares ($)</option>
+                    <option value="bs">Bolívares (Bs)</option>
+                    <option value="eur">Euros (€)</option>
+                    <option value="mxn">Pesos (MXN)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: styles.surface2, borderRadius: 8, border: `1px solid ${styles.border}` }}>
+                <div style={{ fontSize: 13, color: styles.text, fontWeight: 600 }}>Método Activo</div>
+                <div onClick={() => setEditingMetodo({ ...editingMetodo, activo: !editingMetodo.activo })} style={{ width: 40, height: 22, borderRadius: 11, background: editingMetodo.activo ? styles.orange : styles.border, position: 'relative', cursor: 'pointer', transition: '0.2s' }}>
+                  <div style={{ width: 18, height: 18, borderRadius: 9, background: '#fff', position: 'absolute', top: 2, left: editingMetodo.activo ? 20 : 2, transition: '0.2s' }} />
+                </div>
+              </div>
+            </div>
+            <div style={{ padding: '16px 24px', borderTop: `1px solid ${styles.border}`, background: styles.surface2, display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+              <button onClick={() => setShowMetodoModal(false)} style={{ padding: '8px 16px', borderRadius: 8, border: `1px solid ${styles.border}`, background: 'transparent', color: styles.text, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={saveMetodo} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: styles.orange, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Guardar Método</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

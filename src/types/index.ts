@@ -11,7 +11,7 @@ export const MODULE_PLANS: Record<ModuleId, Plan> = {
   pos:         'basic',
   mesero:      'basic',
   kds:         'basic',
-  admin:       'pro',
+  admin:       'basic',
   retail:      'pro',
   crm:         'pro',
   fintrack:    'ent',
@@ -67,15 +67,30 @@ export interface Tenant {
 // ── Ventas / POS ─────────────────────────────────────────────
 export interface MenuItem {
   id:          string
+  tenant_id:   string
+  cat:         string         // UUID de categoría
+  subgroup_id?: string | null // UUID de subgrupo
   nombre:      string
-  cat:         string
   precio:      number
+  activo:      boolean
+  agotado:     boolean
+  emoji?:      string
+  descripcion?: string
+  
+  // Modificadores Relacionados (JSON arrays almacenando UUIDs de mods)
+  forced_modifiers?: {
+    enabled: boolean
+    label: string
+    maxSelections: number
+    modifierIds: string[]
+  }
+  extras_modifier_ids?: string[]
+  sin_modifier_ids?: string[]
+
+  // Legacy/Other
   precioMatriz?: Record<string, number[]>
   modificadores?: string[]
   receta?:     Array<{ invId: string; cantidad: number }>
-  activo:      boolean
-  descripcion?: string
-  emoji?:      string
   kdsStation?: string
 }
 
