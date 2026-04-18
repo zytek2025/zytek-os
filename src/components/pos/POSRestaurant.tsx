@@ -1873,7 +1873,7 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
                         background: statusStyle.bg, width: '100%', height: '100%',
                         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                         boxShadow: isOcupada ? `0 8px 20px ${statusStyle.border}33` : 'none',
-                        opacity: isOcupada ? 1 : 0.5,
+                        opacity: 1,
                         transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
                       }}
                     >
