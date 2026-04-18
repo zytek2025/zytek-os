@@ -49,11 +49,12 @@ interface MetodoPago {
 // El sistema utiliza ahora validación por Base de Datos (BCrypt)
 
 type AuthAction =
-  | 'anularPlato' | 'anularOrden' | 'descuento' | 'abrirCredito'
+  | 'abrirMesa' | 'anularPlato' | 'anularOrden' | 'descuento' | 'abrirCredito'
   | 'registrarAbono' | 'cobrar' | 'enviarCocina' | 'corteZ' | 'corteX'
   | 'actualizarTasa'
 
 const AUTH_NIVEL_MIN: Record<AuthAction, number> = {
+  abrirMesa: 5,
   anularPlato: 3,
   anularOrden: 3,
   descuento: 3,
@@ -316,6 +317,7 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
   }, [])
 
   const swipeRef = useRef<{ x: number; y: number } | null>(null)
+  const lastAuthUserRef = useRef<ZytekUser | null>(null)
   const [clock, setClock] = useState<{ date: string; time: string }>({ date: '--/--/----', time: '--:--' })
   const [gridPage, setGridPage] = useState(0)
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -682,30 +684,65 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
       }
       return
     }
-    let targetTable = table
     if (table.estado === 'libre') {
-      const orderId = crypto.randomUUID()
-      const tsAbierta = new Date()
-      targetTable = { ...table, id_db: orderId, estado: 'ocupada' as TableStatus, pedido: [], opened: tsAbierta }
-      
-      // Sincronizar apertura de mesa de inmediato
-      import('@/lib/idb.client').then(({ idbPut, enqueueSync }) => {
-        const orderData = {
-          id: orderId,
-          tenant_id: subscription.tenantId,
-          mesa: table.nombre || table.numero.toString(),
-          status: 'draft',
-          waiter_id: currentUser?.id,
-          ts_abierta: tsAbierta.toISOString()
+      // Siempre pedir PIN para identificar quién abre la mesa
+      setAuthCallback(() => () => {
+        const authUser = lastAuthUserRef.current
+        const orderId = crypto.randomUUID()
+        const tsAbierta = new Date()
+        const meseroNombre = authUser?.nombre || '—'
+        const meseroId = authUser?.id
+        const openedTable: Table = {
+          ...table,
+          id_db: orderId,
+          estado: 'ocupada' as TableStatus,
+          pedido: [],
+          opened: tsAbierta,
+          mesero: meseroNombre,
         }
-        idbPut('pos_orders', orderData)
-        enqueueSync('pos', 'pos_orders', 'upsert', orderData)
-      })
 
-      const updated = tables.map(t => t.id === table.id ? targetTable : t)
-      setTables(updated)
+        // Sincronizar apertura de mesa + asignar mesero
+        import('@/lib/idb.client').then(({ idbPut, enqueueSync }) => {
+          const orderData = {
+            id: orderId,
+            tenant_id: subscription.tenantId,
+            mesa: table.nombre || table.numero.toString(),
+            status: 'draft',
+            waiter_id: meseroId,
+            ts_abierta: tsAbierta.toISOString()
+          }
+          idbPut('pos_orders', orderData)
+          enqueueSync('pos', 'pos_orders', 'upsert', orderData)
+
+          // Persistir mesero en la tabla mesas
+          supabase.from('mesas').update({ mesero: meseroNombre, estado: 'ocupada' }).eq('id', table.id).then(() => {})
+        })
+
+        // Audit trail
+        import('@/services/audit-service').then(({ AuditService }) => {
+          AuditService.recordAction({
+            tenantId: subscription.tenantId,
+            userId: meseroId,
+            action: 'OPEN_TABLE',
+            entityType: 'order',
+            entityId: orderId,
+            dataAfter: { mesa_numero: table.numero, mesero: meseroNombre },
+          })
+        })
+
+        const updated = tables.map(t => t.id === table.id ? openedTable : t)
+        setTables(updated)
+        setSelectedTable(openedTable)
+        setCurrentView('comanda')
+      })
+      setAuthMinNivel(5)
+      setAuthActionLabel('abrirMesa')
+      setAuthError('')
+      setPin('')
+      setShowAuthOverlay(true)
+      return
     }
-    setSelectedTable(targetTable)
+    setSelectedTable(table)
     setCurrentView('comanda')
   }
 
@@ -865,12 +902,7 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
       let authenticatedUser = null
       for (const u of dbUsers || []) {
         const isMatch = await bcrypt.compare(pinToValidate, u.pin_hash)
-
-        // Hardcoded bypass para la demo (IDs específicos de Admin y Mesero)
-        const isDemo = (u.id === '00000000-0000-0000-0100-000000000001' && pinToValidate === '1234') ||
-                       (u.id === '00000000-0000-0000-0100-000000000002' && pinToValidate === '5678')
-
-        if (isMatch || isDemo) {
+        if (isMatch) {
           console.log(`✅ Acceso concedido: ${u.nombre}`)
           authenticatedUser = u
           break
@@ -965,6 +997,9 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
       if (authenticatedUser && authenticatedUser.nivel <= authMinNivel) {
         setPinFailedCount(0)
         setPinBlockedUntil(null)
+        lastAuthUserRef.current = authenticatedUser
+        // Para abrirMesa: el mesero que metió PIN pasa a ser el usuario activo
+        if (authActionLabel === 'abrirMesa') setCurrentUser(authenticatedUser)
         if (authCallback) authCallback()
         setShowAuthOverlay(false)
         setPin('')
@@ -1315,7 +1350,7 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
         </div>
         
         <div style={{ fontSize: 10, color: colors.textDim, fontFamily: 'DM Mono, monospace' }}>
-          <div>Demo: 1234=Admin, 5678=Cajero, 9012=Mesero</div>
+          ZytekOS · POS v2.0
         </div>
       </div>
     </div>
