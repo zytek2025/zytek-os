@@ -13,16 +13,17 @@ INSERT INTO tenants (id, nombre, pais, tasa, plan) VALUES
 ON CONFLICT (id) DO NOTHING;
 
 -- Demo users — bcrypt hashed PINs (cost=10, no plain text ever)
+-- PINs: Daniel=1369, Admin=1234, Cajero=4321, Mesero=5678
 -- Re-run: node -e "require('bcryptjs').hashSync('PIN',10)" to regenerate
 INSERT INTO zytek_users (id, tenant_id, nombre, pin_hash, nivel, rol, color) VALUES
   ('00000000-0000-0000-0001-000000000001', '00000000-0000-0000-0000-000000000001',
-   'Daniel F.', '$2a$10$N5Ub8qW2f4XmDJp0cYhVPuJBa9TmCRv7nK6kL2.WxFqOkrPg3eZ2i', 1, 'Super Admin',   '#ff7c20'),
+   'Daniel F.', '$2a$10$vNaSuoBt4W.xz1NeXymmmuRxpvNJGFqZosOIRKJO6Hzau/KXqFtUW', 1, 'Super Admin',   '#ff7c20'),
   ('00000000-0000-0000-0001-000000000002', '00000000-0000-0000-0000-000000000001',
-   'Admin',     '$2a$10$K8Z.WqnzYb0uFmDxRJ7.iOqwLfOhEbCAk5YxQjFPNJGiTlFo7mJaK', 2, 'Administrador', '#38b6ff'),
+   'Admin',     '$2a$10$ZDFJlcpXS8QokblQI7mofedIIVafX90P6DRzPOCTxvK3VwLljRX4S', 2, 'Administrador', '#38b6ff'),
   ('00000000-0000-0000-0001-000000000003', '00000000-0000-0000-0000-000000000001',
-   'Cajero',    '$2a$10$HmR4xKvDcE1pQfA7wYb5JOk9UnTBiGlW3NzMd0Xs6VoP.jCqeL8Fu', 4, 'Cajero',        '#2ee87a'),
+   'Cajero',    '$2a$10$FE9Nn/6PvG/7Y4yLgjjv.OZbsB3VUfNkR/ZiWV4fn34CQBl.t5ypC', 4, 'Cajero',        '#2ee87a'),
   ('00000000-0000-0000-0001-000000000004', '00000000-0000-0000-0000-000000000001',
-   'Mesero 1',  '$2a$10$Tz3YpKnBm9sQeVlFcW4aROdGr8JkMvXh6CiAb1Nu5Pw2Lf0gDj7Ey', 5, 'Mesero',        '#a855f7')
+   'Mesero 1',  '$2a$10$QsjrybU6LxlTII9t8jRgm.KcORqdpxfb10PUsrmmyS4gpE5T7/mTG', 5, 'Mesero',        '#a855f7')
 ON CONFLICT (id) DO NOTHING;
 
 -- Demo menu items
