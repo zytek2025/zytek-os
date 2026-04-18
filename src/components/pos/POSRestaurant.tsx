@@ -1901,28 +1901,36 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
                       <div style={{ fontSize: 9, fontFamily: 'DM Mono, monospace', letterSpacing: 1, color: statusStyle.text, fontWeight: 700 }}>
                         {getStatusLabel(table.estado).toUpperCase()}
                       </div>
-                      {table.estado !== 'libre' && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center', marginTop: 6 }}>
-                          {table.monto !== undefined && (
-                            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 13, fontWeight: 800, color: colors.amber, background: 'rgba(0,0,0,0.4)', padding: '2px 8px', borderRadius: 6 }}>
-                              ${Number(table.monto).toFixed(2)}
+                      {table.estado !== 'libre' && (() => {
+                        const items = table.pedido || []
+                        const total = items.reduce((s, i) => s + i.precio * i.cantidad, 0)
+                        const count = items.reduce((s, i) => s + i.cantidad, 0)
+                        return (
+                          <>
+                            {table.mesero && (
+                              <span
+                                title={table.mesero}
+                                style={{
+                                  position: 'absolute', bottom: 6, left: 8,
+                                  fontSize: 11, fontWeight: 500, fontFamily: 'DM Sans, sans-serif',
+                                  color: getAvatarColor(table.mesero),
+                                  maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {table.mesero}
+                              </span>
+                            )}
+                            <div style={{ position: 'absolute', bottom: 4, right: 8, textAlign: 'right' }}>
+                              <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 13, fontWeight: 500, color: '#fff', fontVariantNumeric: 'tabular-nums' }}>
+                                ${total.toFixed(2)}
+                              </div>
+                              <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>
+                                {count} ítem{count !== 1 ? 's' : ''}
+                              </div>
                             </div>
-                          )}
-                          {table.mesero && (
-                            <span
-                              title={table.mesero}
-                              style={{
-                                position: 'absolute', bottom: 6, left: 8,
-                                fontSize: 11, fontWeight: 500, fontFamily: 'DM Sans, sans-serif',
-                                color: getAvatarColor(table.mesero),
-                                maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                              }}
-                            >
-                              {table.mesero}
-                            </span>
-                          )}
-                        </div>
-                      )}
+                          </>
+                        )
+                      })()}
                     </div>
                   )
                 } else {
