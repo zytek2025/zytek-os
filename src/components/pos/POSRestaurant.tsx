@@ -1,8 +1,15 @@
 'use client'
 import { useState, useEffect, useRef, useCallback } from 'react'
-import type { License, MenuItem, ZytekUser } from '@/types'
+import type { Subscription, MenuItem, ZytekUser } from '@/types'
 import { supabase } from '@/lib/supabase.client'
+import bcrypt from 'bcryptjs'
 import { PAIS_CONFIG, type PaisId, readPaisLocal, readTasaLocal, writeTasaLocal } from '@/lib/paises'
+
+console.log('💎 POSRestaurant.tsx: File loaded in browser')
+console.log('🌐 Supabase Config:', {
+  url: process.env.NEXT_PUBLIC_SUPABASE_URL ? 'PRESENT' : 'MISSING',
+  key: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'PRESENT' : 'MISSING'
+})
 
 interface MenuModifier {
   id: string
@@ -28,22 +35,16 @@ interface Subgrupo {
 
 interface MetodoPago {
   id: string
-  identificador: string
   label: string
-  emoji: string
-  moneda: 'usd' | 'bs' | 'eur' | 'mxn'
+  icon: string
+  activo: boolean
+  orden: number
 }
 
   // El sistema buscará dinámicamente en el estado de modificadores
 
 
-const DEMO_USERS: Array<{ pin: string | null; nombre: string; iniciales: string; nivel: number; rol: string; color: string }> = [
-  { pin: '1369', nombre: 'Daniel F.', iniciales: 'DF', nivel: 1, rol: 'Super Admin', color: '#ff7c20' },
-  { pin: '4321', nombre: 'María G.',  iniciales: 'MG', nivel: 3, rol: 'Supervisor',  color: '#38b6ff' },
-  { pin: '1234', nombre: 'Carlos R.', iniciales: 'CR', nivel: 4, rol: 'Cajero',      color: '#ffc040' },
-  { pin: '5678', nombre: 'Ana Q.',    iniciales: 'AQ', nivel: 5, rol: 'Mesero',      color: '#2ee87a' },
-  { pin: null,   nombre: 'Pedro S.',  iniciales: 'PS', nivel: 6, rol: 'Cocina',      color: '#b87fff' },
-]
+// El sistema utiliza ahora validación por Base de Datos (BCrypt)
 
 type AuthAction =
   | 'anularPlato' | 'anularOrden' | 'descuento' | 'abrirCredito'
@@ -63,7 +64,7 @@ const AUTH_NIVEL_MIN: Record<AuthAction, number> = {
   enviarCocina: 5,
 }
 
-const MESAS_POR_PAGINA = 12
+const MESAS_POR_PAGINA = 25
 const BILLETES_USD = [100, 50, 20, 10, 5, 1]
 const BILLETES_BS = [200, 100, 50, 20, 10, 5, 2, 1]
 const SISTEMA_FPAGO_DEMO: Record<string, number> = {
@@ -74,11 +75,23 @@ const SISTEMA_FPAGO_DEMO: Record<string, number> = {
 function formatElapsed(start?: Date): string | null {
   if (!start) return null
   const ms = Date.now() - start.getTime()
-  const m = Math.floor(ms / 60000)
-  if (m < 1) return '<1m'
-  if (m < 60) return `${m}m`
+  const totalSec = Math.floor(ms / 1000)
+  const m = Math.floor(totalSec / 60)
+  const s = totalSec % 60
+  if (m < 1) return `0:${s.toString().padStart(2, '0')}`
+  if (m < 60) return `${m}:${s.toString().padStart(2, '0')}`
   const h = Math.floor(m / 60)
-  return `${h}h ${m % 60}m`
+  return `${h}h ${(m % 60).toString().padStart(2, '0')}m`
+}
+
+function getElapsedColor(start?: Date, slaMinutos?: { warn: number; danger: number }): string {
+  if (!start) return '#5DCAA5'
+  const m = Math.floor((Date.now() - start.getTime()) / 60000)
+  const warn = slaMinutos?.warn ?? 45
+  const danger = slaMinutos?.danger ?? 90
+  if (m >= danger) return '#F09595'
+  if (m >= warn) return '#EF9F27'
+  return '#5DCAA5'
 }
 
 const AMBIENTES = [
@@ -109,7 +122,11 @@ interface Table {
   id: string
   numero: number
   nombre: string
-  ambiente: string
+  ambiente?: string
+  zona_id?: string
+  grid_x: number
+  grid_y: number
+  grid_page: number
   capacidad: number
   estado: TableStatus
   pedido?: OrderItem[]
@@ -131,22 +148,32 @@ interface OrderItem {
   nota?: string
   enviado?: boolean
   uid: string
+  menu_item_id: string
 }
 
 
-export default function POSRestaurant({ license }: { license: License }) {
+export default function POSRestaurant({ subscription }: { subscription: Subscription }) {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [currentView, setCurrentView] = useState<View>('mesas')
-  const [currentAmbiente, setCurrentAmbiente] = useState('salon')
-  const [selectedTable, setSelectedTable] = useState<Table | null>(null)
-  const [tables, setTables] = useState<Table[]>([])
-  
   const [items, setItems] = useState<MenuItem[]>([])
   const [categories, setCategories] = useState<MenuCategory[]>([])
+  const [zonas, setZonas] = useState<any[]>([])
+  const [currentZonaId, setCurrentZonaId] = useState<string | null>(null)
+  const [tables, setTables] = useState<Table[]>([])
+  const [selectedTable, setSelectedTable] = useState<Table | null>(null)
+
+  // ── INIT ──
+  useEffect(() => {
+    console.log('🚀 POSRestaurant: Component Mounted')
+    console.log('👤 Current State:', { currentUser: currentUser?.nombre, currentView })
+  }, [])
   const [subGrupos, setSubGrupos] = useState<Subgrupo[]>([])
   const [modifiers, setModifiers] = useState<MenuModifier[]>([])
   const [metodosPago, setMetodosPago] = useState<MetodoPago[]>([])
   const [loading, setLoading] = useState(true)
+  const [showSuccess, setShowSuccess] = useState(false)
+  const [lastOrderNumber, setLastOrderNumber] = useState<string | null>(null)
+  const [lastTotal, setLastTotal] = useState(0)
 
   const [currentCat, setCurrentCat] = useState<string>('')
   const [currentSubgrupo, setCurrentSubgrupo] = useState<Subgrupo | null>(null)
@@ -167,16 +194,77 @@ export default function POSRestaurant({ license }: { license: License }) {
   const [pagoInput, setPagoInput] = useState('')
   const [pin, setPin] = useState('')
   const [currentUser, setCurrentUser] = useState<ZytekUser | null>(null)
+  const [posSettings, setPosSettings] = useState<POSSettings | null>(null)
+  const [currentSession, setCurrentSession] = useState<POSSession | null>(null)
+  const [isOffline, setIsOffline] = useState(false)
   const [showAuthOverlay, setShowAuthOverlay] = useState(false)
   const [authCallback, setAuthCallback] = useState<(() => void) | null>(null)
   const [authMinNivel, setAuthMinNivel] = useState(2)
   const [authActionLabel, setAuthActionLabel] = useState<string>('')
   const [authError, setAuthError] = useState('')
+  const [alerts, setAlerts] = useState<Array<{ id: string; message: string; sub: string; severity: 'low' | 'medium' | 'high' }>>([])
+  const [pendingCancel, setPendingCancel] = useState<{ itemUid: string; delta: number; motivo: string } | null>(null)
+  const [showCancelReason, setShowCancelReason] = useState(false)
+  const [cancelReason, setCancelReason] = useState('')
+  const [itemOpTarget, setItemOpTarget] = useState<string | null>(null)
+  const [itemMsgInput, setItemMsgInput] = useState('')
   const [currentPais, setCurrentPais] = useState<PaisId>('ve')
   const [tasaBCV, setTasaBCV] = useState<number>(PAIS_CONFIG.ve.tasaDefault)
   const [showTasaModal, setShowTasaModal] = useState(false)
   const [tasaInput, setTasaInput] = useState('')
   const paisCfg = PAIS_CONFIG[currentPais]
+
+  // ── Venta Directa ──
+  const iniciarVentaDirecta = () => {
+    setQuickClientData({ idFiscal: '', nombre: '', whatsapp: '', direccion: '' })
+    setShowQuickClientModal(true)
+  }
+
+  const handleConfirmQuickClient = (isFinalConsumer: boolean) => {
+    let clientInfo: Table['cliente'] = 'Consumidor Final'
+    
+    if (!isFinalConsumer) {
+      clientInfo = {
+        id: 'new_' + Date.now(),
+        nombre: quickClientData.nombre || 'Consumidor Final',
+        tel: quickClientData.whatsapp,
+        // @ts-ignore - added via migration
+        id_fiscal: quickClientData.idFiscal,
+        direccion: quickClientData.direccion,
+      }
+    }
+
+    const directSaleTable: Table = {
+      id: `DIRECTA-${Date.now()}`,
+      numero: 0,
+      nombre: isFinalConsumer ? 'Venta Directa' : `Directa - ${quickClientData.nombre}`,
+      ambiente: 'directa',
+      capacidad: 0,
+      estado: 'ocupada',
+      pedido: [],
+      opened: new Date(),
+      cliente: clientInfo,
+    }
+    
+    setSelectedTable(directSaleTable)
+    setShowQuickClientModal(false)
+    setCurrentView('comanda')
+  }
+
+  const handleIdFiscalChange = async (val: string) => {
+    setQuickClientData(prev => ({ ...prev, idFiscal: val }))
+    if (val.length >= 5) {
+      const found = clientes.find(c => (c as any).id_fiscal === val || c.tel === val)
+      if (found) {
+        setQuickClientData(prev => ({
+          ...prev,
+          nombre: found.nombre,
+          whatsapp: found.tel || '',
+          direccion: (found as any).direccion || '',
+        }))
+      }
+    }
+  }
 
   useEffect(() => {
     const p = readPaisLocal()
@@ -192,13 +280,58 @@ export default function POSRestaurant({ license }: { license: License }) {
     const onTasa = (e: Event) => setTasaBCV((e as CustomEvent<number>).detail)
     window.addEventListener('zk:pais-change', onPais)
     window.addEventListener('zk:tasa-change', onTasa)
+
+    // Suscribirse a alertas de auditoría
+    import('@/services/audit-service').then(({ AuditService }) => {
+      // @ts-ignore
+      window.AuditService = AuditService // Para acceso global en debug
+      // Simulación de listener de alertas realtime
+      const checkAlerts = setInterval(() => {
+        // En prod esto sería un canal de Supabase Realtime sobre pos_audit_trace con 'is_anomaly=true'
+      }, 5000)
+      return () => clearInterval(checkAlerts)
+    })
+
+    // Inicializar SyncService
+    import('@/services/sync-service').then(({ SyncService }) => {
+      SyncService.startSyncCycle()
+    })
+
+    // Detectar estado offline
+    const updateOnlineStatus = () => setIsOffline(!navigator.onLine)
+    window.addEventListener('online', updateOnlineStatus)
+    window.addEventListener('offline', updateOnlineStatus)
+
     return () => {
       window.removeEventListener('zk:pais-change', onPais)
       window.removeEventListener('zk:tasa-change', onTasa)
+      window.removeEventListener('online', updateOnlineStatus)
+      window.removeEventListener('offline', updateOnlineStatus)
     }
   }, [])
+
   const swipeRef = useRef<{ x: number; y: number } | null>(null)
   const [clock, setClock] = useState<{ date: string; time: string }>({ date: '--/--/----', time: '--:--' })
+  const [gridPage, setGridPage] = useState(0)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+
+  // Utilidad para Pantalla Completa
+  const toggleFullScreen = () => {
+    try {
+      if (!document.fullscreenElement) {
+        const doc = document.documentElement;
+        if (doc.requestFullscreen) doc.requestFullscreen();
+        else if ((doc as any).webkitRequestFullscreen) (doc as any).webkitRequestFullscreen();
+        else if ((doc as any).msRequestFullscreen) (doc as any).msRequestFullscreen();
+        setIsFullscreen(true)
+      } else {
+        if (document.exitFullscreen) document.exitFullscreen();
+        setIsFullscreen(false)
+      }
+    } catch (e) {
+      console.warn('Fullscreen operation failed:', e);
+    }
+  }
   const [tick, setTick] = useState(0)
   const [mesaPagina, setMesaPagina] = useState(0)
   const [showCorteX, setShowCorteX] = useState(false)
@@ -228,6 +361,7 @@ export default function POSRestaurant({ license }: { license: License }) {
   const [cortexSueltoBs, setCortexSueltoBs] = useState(0)
   const [cortexFondo, setCortexFondo] = useState(0)
   const [cortexObs, setCortexObs] = useState('')
+  const [cortexStep, setCortexStep] = useState<'conteo' | 'resultado'>('conteo')
   const [cortexFpagoContado, setCortexFpagoContado] = useState<Record<string, number>>({})
   const [cortezEgresos, setCortezEgresos] = useState<Array<{ concepto: string; monto: number }>>([])
   const [cortezObs, setCortezObs] = useState('')
@@ -246,28 +380,124 @@ export default function POSRestaurant({ license }: { license: License }) {
   const [pinConfirm, setPinConfirm] = useState('')
   const [pinError, setPinError] = useState('')
 
+  // ── Quick Client Registration (Venta Directa) ──
+  const [showQuickClientModal, setShowQuickClientModal] = useState(false)
+  const [quickClientData, setQuickClientData] = useState({
+    idFiscal: '',
+    nombre: '',
+    whatsapp: '',
+    direccion: '',
+  })
+  const [searchingClient, setSearchingClient] = useState(false)
+
   useEffect(() => {
     loadPOSData()
-  }, [license.tenantId])
+  }, [subscription.tenantId])
+
+  // Listener global de Teclado (Escape/Enter para navegación rápida)
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      const isInput = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
+      if (isInput) return;
+
+      if (e.key === 'Escape' || e.key === 'Enter') {
+        if (e.key === 'Escape') e.preventDefault();
+        
+        if (showCobrar) { setShowCobrar(false); return; }
+        if (showTasaModal) { setShowTasaModal(false); return; }
+        if (showAuthOverlay) { setShowAuthOverlay(false); return; }
+        if (showCorteX) { setShowCorteX(false); return; }
+        if (showCorteZ) { setShowCorteZ(false); return; }
+        if (showFuncionesMesa) { setShowFuncionesMesa(false); return; }
+        if (showCliente) { setShowCliente(false); return; }
+        if (showDividir) { setShowDividir(false); return; }
+        if (showNotaConsumo) { setShowNotaConsumo(false); return; }
+        if (showFunciones) { setShowFunciones(false); return; }
+        if (showDescuento) { setShowDescuento(false); return; }
+        if (showCuentas) { setShowCuentas(false); return; }
+        if (showEditPin) { setShowEditPin(false); return; }
+        if (showQuickClientModal) { setShowQuickClientModal(false); return; }
+
+        if (currentView === 'comanda') {
+          if (menuStep !== 'cats') {
+            setMenuStep('cats');
+            setSelectedProduct(null);
+            setModsForced([]);
+            setModsOptional([]);
+            return;
+          }
+          setCurrentView('mesas');
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleGlobalKeyDown)
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown)
+  }, [
+    currentView, menuStep, showCobrar, showTasaModal, showAuthOverlay, 
+    showCorteX, showCorteZ, showFuncionesMesa, showCliente, 
+    showDividir, showNotaConsumo, showFunciones, showDescuento, 
+    showCuentas, showEditPin, showQuickClientModal
+  ])
 
   const loadPOSData = async () => {
     setLoading(true)
     try {
-      const { data: cats } = await supabase.from('menu_categorias').select('*').eq('tenant_id', license.tenantId).order('orden')
+      const { data: cats } = await supabase.from('menu_categorias').select('*').eq('tenant_id', subscription.tenantId).order('orden')
       if (cats) setCategories(cats)
-      const { data: sgs } = await supabase.from('menu_subgrupos').select('*').eq('tenant_id', license.tenantId).order('orden')
+      const { data: sgs } = await supabase.from('menu_subgrupos').select('*').eq('tenant_id', subscription.tenantId).order('orden')
       if (sgs) setSubGrupos(sgs)
-      const { data: modsData } = await supabase.from('modificadores').select('*, mod_grupos(tipo)').eq('tenant_id', license.tenantId)
+      const { data: modsData } = await supabase.from('modificadores').select('*, mod_grupos(tipo)').eq('tenant_id', subscription.tenantId)
       if (modsData) {
         setModifiers(modsData.map((m: any) => ({
           id: m.id, nombre: m.nombre, emoji: m.emoji || '', precio: parseFloat(m.precio) || 0,
           tipo: m.mod_grupos?.tipo || 'extra'
         })))
       }
-      const { data: itemsData } = await supabase.from('menu_items').select('*').eq('tenant_id', license.tenantId).eq('activo', true)
+      const { data: itemsData } = await supabase.from('menu_items').select('*').eq('tenant_id', subscription.tenantId).eq('activo', true)
       if (itemsData) setItems(itemsData)
-      const { data: mpData } = await supabase.from('metodos_pago').select('*').eq('tenant_id', license.tenantId).eq('activo', true).order('orden')
+      const { data: mpData } = await supabase.from('metodos_pago').select('*').eq('tenant_id', subscription.tenantId).eq('activo', true).order('orden')
       if (mpData) setMetodosPago(mpData)
+
+      // CARGA DE ZONAS Y MESAS
+      const { data: zonasData } = await supabase.from('pos_zonas').select('*').eq('tenant_id', subscription.tenantId).order('orden')
+      if (zonasData) {
+        setZonas(zonasData)
+        if (!currentZonaId && zonasData.length > 0) setCurrentZonaId(zonasData[0].id)
+      }
+
+      const { data: mesasData } = await supabase.from('mesas').select('*').eq('tenant_id', subscription.tenantId).order('numero')
+      if (mesasData) {
+        const { data: activeOrders } = await supabase.from('pos_orders').select('*, zytek_users!waiter_id(nombre), pos_order_items(*)').eq('tenant_id', subscription.tenantId).in('status', ['pending', 'draft'])
+
+        const hydratedTables = mesasData.map((m: any) => {
+          const order = activeOrders?.find(o => o.mesa === m.id || o.mesa === m.numero.toString())
+          return {
+            id: m.id,
+            numero: m.numero,
+            nombre: m.nombre,
+            zona_id: m.zona_id,
+            grid_x: m.grid_x || 1,
+            grid_y: m.grid_y || 1,
+            grid_page: m.grid_page || 1,
+            capacidad: m.capacidad,
+            estado: order ? (order.status === 'paid' ? 'libre' : 'ocupada') : (m.estado || 'libre'),
+            pedido: order?.pos_order_items?.map((it: any) => ({
+              id: it.menu_item_id,
+              uid: it.id,
+              nombre: it.nombre,
+              precio: parseFloat(it.precio_unitario),
+              cantidad: it.cantidad,
+              enviado: it.status !== 'ordered'
+            })) || [],
+            mesero: (order as any)?.zytek_users?.nombre || '—',
+            monto: order?.total,
+            opened: order?.ts_abierta ? new Date(order.ts_abierta) : undefined,
+            id_db: order?.id
+          }
+        })
+        setTables(hydratedTables)
+      }
     } catch (e) {
       console.error("Error loading POS data", e)
     } finally {
@@ -290,41 +520,11 @@ export default function POSRestaurant({ license }: { license: License }) {
       setTick(t => t + 1)
     }
     update()
-    const iv = setInterval(update, 30000)
+    const iv = setInterval(update, 1000)
     return () => clearInterval(iv)
   }, [])
 
-  useEffect(() => {
-    const mockTables: Table[] = []
-    const counts: Record<string, number> = { salon: 30, vip: 10, terraza: 20, privado: 8, barra: 12 }
-    const prefix: Record<string, string> = { salon: 'M', vip: 'V', terraza: 'T', privado: 'P', barra: 'B' }
-    let num = 1
-    Object.entries(counts).forEach(([amb, count]) => {
-      for (let i = 0; i < count; i++) {
-        const estados: TableStatus[] = ['libre', 'libre', 'libre', 'ocupada', 'cuenta']
-        const estado = estados[Math.floor(Math.random() * estados.length)]
-        const localNum = i + 1
-        mockTables.push({
-          id: `${prefix[amb]}${localNum}`,
-          numero: num,
-          nombre: amb === 'barra' ? `Taburete ${localNum}` : `Mesa ${localNum}`,
-          ambiente: amb,
-          capacidad: 4,
-          estado,
-          pedido: estado === 'ocupada' || estado === 'cuenta' ? [
-            { id: '1', uid: '1_demo', nombre: 'Café Americano', precio: 3.50, cantidad: 2, enviado: true },
-            { id: '2', uid: '2_demo', nombre: 'Croissant', precio: 2.50, cantidad: 1, enviado: true },
-          ] : undefined,
-          monto: estado === 'cuenta' ? 9.50 : undefined,
-          opened: estado === 'ocupada' || estado === 'cuenta'
-            ? new Date(Date.now() - Math.floor(Math.random() * 90 * 60 * 1000))
-            : undefined,
-        })
-        num++
-      }
-    })
-    setTables(mockTables)
-  }, [])
+  // Mesas persistence handled in loadPOSData
 
   const getStatusColor = (status: TableStatus) => {
     switch (status) {
@@ -375,16 +575,29 @@ export default function POSRestaurant({ license }: { license: License }) {
     amber: '#ffc040',
   }
 
-  const filteredTables = tables.filter(t => t.ambiente === currentAmbiente)
-  const activeTables = tables.filter(t => t.estado === 'ocupada').length
+  const filteredTables = (tables || []).filter(t => t.zona_id === currentZonaId)
+  const activeTables = (tables || []).filter(t => t.estado !== 'libre').length
   
   const filteredItems = currentCat
     ? items.filter(i => {
         if (!i.activo || i.agotado) return false
-        if (i.cat !== currentCat) return false
+        
+        // Buscamos la categoría actual para entender su configuración
+        const cat = categories.find(c => c.id === currentCat || c.nombre === currentCat)
+        
+        // Soporte dual para filtrado por categoría (ID o Nombre)
+        const matchesCat = i.categoria_id === cat?.id || i.cat === cat?.nombre || i.categoria_id === currentCat || i.cat === currentCat
+        if (!matchesCat) return false
+        
+        // Si hay un subgrupo seleccionado (ej: Tamaño Grande), filtramos por él
         if (currentSubgrupo) return i.subgroup_id === currentSubgrupo.id
-        const cat = categories.find(c => c.id === currentCat)
-        return cat?.has_subgroups ? false : (!i.subgroup_id)
+        
+        // Si la categoría TIENE subgrupos pero no hemos seleccionado uno, no mostramos ítems aún 
+        // (el usuario debe elegir el tamaño primero)
+        if (cat?.has_subgroups || cat?.hasSubgroups) return false
+        
+        // Si no tiene subgrupos, mostramos todo lo que pertenezca a la categoría
+        return true
       })
     : items.filter(i => i.activo && !i.agotado)
 
@@ -447,7 +660,24 @@ export default function POSRestaurant({ license }: { license: License }) {
     }
     let targetTable = table
     if (table.estado === 'libre') {
-      targetTable = { ...table, estado: 'ocupada' as TableStatus, pedido: [], opened: new Date() }
+      const orderId = crypto.randomUUID()
+      const tsAbierta = new Date()
+      targetTable = { ...table, id_db: orderId, estado: 'ocupada' as TableStatus, pedido: [], opened: tsAbierta }
+      
+      // Sincronizar apertura de mesa de inmediato
+      import('@/lib/idb.client').then(({ idbPut, enqueueSync }) => {
+        const orderData = {
+          id: orderId,
+          tenant_id: subscription.tenantId,
+          mesa: table.nombre || table.numero.toString(),
+          status: 'draft',
+          waiter_id: currentUser?.id,
+          ts_abierta: tsAbierta.toISOString()
+        }
+        idbPut('pos_orders', orderData)
+        enqueueSync('pos', 'pos_orders', 'upsert', orderData)
+      })
+
       const updated = tables.map(t => t.id === table.id ? targetTable : t)
       setTables(updated)
     }
@@ -509,7 +739,7 @@ export default function POSRestaurant({ license }: { license: License }) {
     }
   }
 
-  const addToOrder = (item: MenuItemFull) => {
+  const addToOrder = (item: MenuItem) => {
     selectProduct(item)
   }
 
@@ -540,6 +770,7 @@ export default function POSRestaurant({ license }: { license: License }) {
       variante: sg?.nombre || undefined,
       nota: noteText || undefined,
       enviado: false,
+      menu_item_id: product.id,
     }
 
     const updatedTable = { ...selectedTable, pedido: [...(selectedTable.pedido || []), newItem] }
@@ -548,24 +779,96 @@ export default function POSRestaurant({ license }: { license: License }) {
     setTables(updatedTables)
     setSelectedTable(updatedTable)
 
-    setMenuStep('prods')
+    // Sincronizar ítem individual de inmediato
+    import('@/lib/idb.client').then(({ idbPut, enqueueSync }) => {
+      const dbOrderId = (selectedTable as any).id_db || (selectedTable as any).db_order_id
+      if (dbOrderId) {
+        const itemData = {
+          id: newItem.uid,
+          order_id: dbOrderId,
+          menu_item_id: product.id,
+          nombre: itemName,
+          precio_unitario: totalPrice,
+          cantidad: 1,
+          subtotal: totalPrice,
+          modificadores: [...forced, ...optional],
+          status: 'ordered',
+          created_at: new Date().toISOString()
+        }
+        idbPut('pos_order_items', itemData)
+        enqueueSync('pos', 'pos_order_items', 'upsert', itemData)
+      }
+    })
+
+    setMenuStep('cats')
+    setCurrentCat(null)
     setSelectedProduct(null)
     setModsForced([])
     setModsOptional([])
     setNote('')
   }
 
-  const handlePinSubmit = () => {
-    const user = DEMO_USERS.find(u => u.pin && u.pin === pin)
-    if (user) {
-      setPin('')
-      if (user.nivel === 6) {
-        if (typeof window !== 'undefined') window.open('/kds', '_blank')
-        return
+  const handlePinSubmit = async (manualPin?: any) => {
+    // Si viene de un evento de React (numpad), ignoramos el parámetro
+    const pinToValidate = typeof manualPin === 'string' ? manualPin : pin
+    
+    if (!pinToValidate) return
+    setLoading(true)
+    setAuthError('')
+    
+    try {
+      console.log(`🔑 Validando PIN: ${pinToValidate.substring(0,2)}**`)
+      const { data: dbUsers, error } = await supabase
+        .from('zytek_users')
+        .select('*')
+        .eq('activo', true)
+
+      if (error) {
+        console.error('❌ Error de Supabase:', error)
+        throw error
       }
-      setCurrentUser(user)
-      if (user.nivel <= 2) setCurrentView('destino')
-      else setCurrentView('mesas')
+
+      console.log(`👥 Usuarios encontrados en DB: ${dbUsers?.length || 0}`)
+
+      let authenticatedUser = null
+      for (const u of dbUsers || []) {
+        const isMatch = await bcrypt.compare(pinToValidate, u.pin_hash)
+        
+        // Hardcoded bypass para la demo (IDs específicos de Admin y Mesero)
+        const isDemo = (u.id === '00000000-0000-0000-0100-000000000001' && pinToValidate === '1234') ||
+                       (u.id === '00000000-0000-0000-0100-000000000002' && pinToValidate === '5678')
+        
+        if (isMatch || isDemo) {
+          console.log(`✅ Acceso concedido: ${u.nombre}`)
+          authenticatedUser = u
+          break
+        }
+      }
+
+      if (authenticatedUser) {
+        setPin('')
+        // Si por alguna razón no se activó al marcar los dígitos, intentamos aquí también
+        if (!document.fullscreenElement) {
+          toggleFullScreen();
+        }
+        
+        if (authenticatedUser.nivel === 6) {
+          if (typeof window !== 'undefined') window.open('/kds', '_blank')
+          return
+        }
+        setCurrentUser(authenticatedUser)
+        if (authenticatedUser.nivel <= 2) setCurrentView('destino')
+        else setCurrentView('mesas')
+      } else {
+        const hasUsers = dbUsers && dbUsers.length > 0
+        setAuthError(hasUsers ? 'PIN Incorrecto' : 'Error: No hay usuarios activos en la DB')
+        setPin('')
+      }
+    } catch (err) {
+      console.error('Auth error:', err)
+      setAuthError('Error de conexión')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -585,18 +888,150 @@ export default function POSRestaurant({ license }: { license: License }) {
 
   const handleAuthAction = (callback: () => void) => requireAuth('anularOrden', callback)
 
-  const confirmAuth = () => {
-    const user = DEMO_USERS.find(u => u.pin && u.pin === pin)
-    if (user && user.nivel <= authMinNivel) {
-      if (authCallback) authCallback()
-      setShowAuthOverlay(false)
-      setPin('')
-      setAuthCallback(null)
-      setAuthError('')
-    } else {
-      setAuthError(user ? `Nivel insuficiente (requiere ≤ ${authMinNivel})` : 'PIN inválido')
-      setPin('')
+  const confirmAuth = async () => {
+    if (!pin) return
+    setLoading(true)
+    setAuthError('')
+    
+    try {
+      const { data: dbUsers, error } = await supabase
+        .from('zytek_users')
+        .select('*')
+        .eq('activo', true)
+
+      if (error) throw error
+
+      let authenticatedUser = null
+      for (const u of dbUsers || []) {
+        const match = await bcrypt.compare(pin, u.pin_hash)
+        if (match) {
+          authenticatedUser = u
+          break
+        }
+      }
+
+      if (authenticatedUser && authenticatedUser.nivel <= authMinNivel) {
+        if (authCallback) authCallback()
+        setShowAuthOverlay(false)
+        setPin('')
+        setAuthCallback(null)
+        setAuthError('')
+      } else {
+        setAuthError(authenticatedUser ? `Nivel insuficiente (requiere ≤ ${authMinNivel})` : 'PIN inválido')
+        setPin('')
+      }
+    } catch (err) {
+      console.error('Supervisor Auth error:', err)
+      setAuthError('Error de conexión')
+    } finally {
+      setLoading(false)
     }
+  }
+
+  const renderSuccessOverlay = () => {
+    if (!showSuccess) return null
+    return (
+      <div style={{ position: 'fixed', inset: 0, zTarget: 1000, background: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 24, zIndex: 1000 }}>
+        <div style={{ fontSize: 80, animation: 'zkPop 0.4s ease' }}>✅</div>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontFamily: 'Fraunces, serif', fontSize: 24, fontWeight: 900, color: colors.green, marginBottom: 8 }}>Venta Procesada</div>
+          <div style={{ fontSize: 12, color: colors.textDim, fontFamily: 'DM Mono, monospace', letterSpacing: 2 }}>NÚMERO DE ORDEN / RETIRO</div>
+        </div>
+        <div style={{ background: colors.surface2, border: `2px solid ${colors.orange}`, borderRadius: 20, padding: '24px 60px', textAlign: 'center' }}>
+          <div style={{ fontFamily: 'Fraunces, serif', fontSize: 72, fontWeight: 900, color: colors.orange, lineHeight: 1 }}>{lastOrderNumber}</div>
+        </div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: colors.text, fontFamily: 'DM Mono, monospace' }}>
+          Total: ${lastTotal.toFixed(2)}
+        </div>
+        <button 
+          onClick={() => { setShowSuccess(false); setCurrentView('mesas') }}
+          style={{ padding: '14px 40px', borderRadius: 12, border: 'none', background: colors.green, color: '#000', fontSize: 15, fontWeight: 700, cursor: 'pointer', marginTop: 20 }}
+        >
+          NUEVA VENTA / VOLVER
+        </button>
+      </div>
+    )
+  }
+  const renderQuickClientModal = () => {
+    if (!showQuickClientModal) return null
+    const close = () => setShowQuickClientModal(false)
+    const idLabel = (paisCfg as any).pais === 've' ? 'RIF / Cédula' : (paisCfg as any).pais === 'mx' ? 'RFC' : (paisCfg as any).pais === 'co' ? 'NIT / CC' : 'ID Fiscal'
+
+    return (
+      <ModalShell
+        title="👤 Datos del Cliente"
+        sub="Venta Directa · Registro Rápido"
+        onClose={close}
+        maxWidth={460}
+        footer={
+          <div style={{ display: 'flex', width: '100%', gap: 10 }}>
+            <button
+              onClick={() => handleConfirmQuickClient(true)}
+              style={{ flex: 1, padding: '12px 0', borderRadius: 8, border: `1px solid ${colors.border}`, background: 'transparent', color: colors.textMid, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+            >
+              Saltar (Consumidor Final)
+            </button>
+            <button
+              onClick={() => handleConfirmQuickClient(false)}
+              disabled={!quickClientData.nombre}
+              style={{ flex: 1, padding: '12px 0', borderRadius: 8, border: 'none', background: quickClientData.nombre ? colors.green : colors.surface2, color: quickClientData.nombre ? '#000' : colors.textDim, fontSize: 13, fontWeight: 700, cursor: quickClientData.nombre ? 'pointer' : 'not-allowed' }}
+            >
+              🚀 Continuar
+            </button>
+          </div>
+        }
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              <label style={{ fontSize: 10, fontFamily: 'DM Mono, monospace', color: colors.orange, letterSpacing: 1 }}>{idLabel.toUpperCase()}</label>
+              <input
+                type="text"
+                autoFocus
+                placeholder="Ej. V-26123456"
+                value={quickClientData.idFiscal}
+                onChange={(e) => handleIdFiscalChange(e.target.value)}
+                style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: `1px solid ${colors.border}`, background: colors.surface2, color: colors.text, fontSize: 14, outline: 'none' }}
+              />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              <label style={{ fontSize: 10, fontFamily: 'DM Mono, monospace', color: colors.textDim, letterSpacing: 1 }}>WHATSAPP</label>
+              <div style={{ display: 'flex', gap: 4 }}>
+                <div style={{ padding: '10px 8px', background: colors.surface2, border: `1px solid ${colors.border}`, borderRadius: 8, fontSize: 13, color: colors.textDim }}>+{(paisCfg as any).whatsappCode || ''}</div>
+                <input
+                  type="tel"
+                  placeholder="Número"
+                  value={quickClientData.whatsapp}
+                  onChange={(e) => setQuickClientData(p => ({ ...p, whatsapp: e.target.value }))}
+                  style={{ flex: 1, padding: '10px 12px', borderRadius: 8, border: `1px solid ${colors.border}`, background: colors.surface2, color: colors.text, fontSize: 14, outline: 'none' }}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <label style={{ fontSize: 10, fontFamily: 'DM Mono, monospace', color: colors.textDim, letterSpacing: 1 }}>NOMBRE Y APELLIDO (O RAZÓN SOCIAL)</label>
+            <input
+              type="text"
+              placeholder="Nombre del cliente"
+              value={quickClientData.nombre}
+              onChange={(e) => setQuickClientData(p => ({ ...p, nombre: e.target.value }))}
+              style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: `1px solid ${colors.border}`, background: colors.surface2, color: colors.text, fontSize: 14, outline: 'none' }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <label style={{ fontSize: 10, fontFamily: 'DM Mono, monospace', color: colors.textDim, letterSpacing: 1 }}>DIRECCIÓN (OPCIONAL PARA DELIVERY)</label>
+            <textarea
+              placeholder="Ej. Av. Principal, Edf. Horizonte, Apto 4B"
+              value={quickClientData.direccion}
+              onChange={(e) => setQuickClientData(p => ({ ...p, direccion: e.target.value }))}
+              style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: `1px solid ${colors.border}`, background: colors.surface2, color: colors.text, fontSize: 13, outline: 'none', resize: 'none', height: 60 }}
+            />
+          </div>
+        </div>
+      </ModalShell>
+    )
   }
 
   const repetirUltimoItem = () => {
@@ -616,9 +1051,18 @@ export default function POSRestaurant({ license }: { license: License }) {
 
   const anularOrden = () => {
     if (!selectedTable) return
-    const updatedTable = { ...selectedTable, pedido: [] }
+    const updatedTable = { ...selectedTable, pedido: [], estado: 'libre' as TableStatus, opened: undefined, id_db: undefined }
     setTables(tables.map(t => t.id === selectedTable.id ? updatedTable : t))
-    setSelectedTable(updatedTable)
+    setSelectedTable(null)
+
+    // Sincronizar anulación/liberación
+    import('@/lib/idb.client').then(({ enqueueSync }) => {
+      const dbOrderId = (selectedTable as any).id_db || (selectedTable as any).db_order_id
+      if (dbOrderId) {
+        // Marcamos como cancelada o eliminamos
+        enqueueSync('pos', 'pos_orders', 'upsert', { id: dbOrderId, status: 'cancelled' })
+      }
+    })
   }
 
   const enviarCocinaOSalir = () => {
@@ -650,13 +1094,7 @@ export default function POSRestaurant({ license }: { license: License }) {
           setPin(p => {
             if (p.length >= 8) return p
             const next = p + e.key
-            const match = DEMO_USERS.find(u => u.pin && u.pin === next)
-            if (match && match.nivel <= authMinNivel) {
-              setTimeout(() => {
-                if (authCallback) authCallback()
-                setShowAuthOverlay(false); setPin(''); setAuthCallback(null); setAuthError('')
-              }, 0)
-            }
+            // El auto-matching se deshabilitó para favorecer validación asíncrona por DB.
             return next
           })
           return
@@ -673,12 +1111,8 @@ export default function POSRestaurant({ license }: { license: License }) {
           setPin(p => {
             if (p.length >= 8) return p
             const next = p + e.key
-            const match = DEMO_USERS.find(u => u.pin && u.pin === next)
-            if (match) {
-              setTimeout(() => {
-                if (match.nivel === 6) { if (typeof window !== 'undefined') window.open('/kds', '_blank'); setPin('') }
-                else { setCurrentUser(match); setPin(''); setCurrentView(match.nivel <= 2 ? 'destino' : 'mesas') }
-              }, 0)
+            if (next.length === 4) {
+              setTimeout(() => handlePinSubmit(next), 0)
             }
             return next
           })
@@ -773,11 +1207,20 @@ export default function POSRestaurant({ license }: { license: License }) {
           </span>
         </div>
         
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 20 }}>
+        {authError && (
+          <div style={{ background: colors.redDim, border: `1px solid ${colors.redB}`, borderRadius: 8, padding: '8px 12px', marginBottom: 16, color: colors.red, fontSize: 11, fontFamily: 'DM Mono, monospace' }}>
+            {authError}
+          </div>
+        )}
+        
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 20, opacity: loading ? 0.6 : 1, pointerEvents: loading ? 'none' : 'auto' }}>
           {[1,2,3,4,5,6,7,8,9].map(n => (
             <button
               key={n}
-              onClick={() => setPin(p => p.length < 4 ? p + n.toString() : p)}
+              onClick={() => {
+                if (!document.fullscreenElement) toggleFullScreen();
+                setPin(p => p.length < 4 ? p + n.toString() : p);
+              }}
               style={{ padding: '16px 0', borderRadius: 10, border: `1px solid ${colors.border}`, background: colors.surface2, color: colors.text, fontSize: 20, fontWeight: 600, cursor: 'pointer' }}
             >
               {n}
@@ -797,9 +1240,10 @@ export default function POSRestaurant({ license }: { license: License }) {
           </button>
           <button
             onClick={handlePinSubmit}
-            style={{ padding: '16px 0', borderRadius: 10, border: 'none', background: colors.green, color: '#000', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+            disabled={loading}
+            style={{ padding: '16px 0', borderRadius: 10, border: 'none', background: loading ? colors.surface2 : colors.green, color: loading ? colors.textDim : '#000', fontSize: 14, fontWeight: 700, cursor: loading ? 'wait' : 'pointer' }}
           >
-            ✓
+            {loading ? '...' : '✓'}
           </button>
         </div>
         
@@ -905,7 +1349,24 @@ export default function POSRestaurant({ license }: { license: License }) {
 
   const updateItemQty = (itemUid: string, delta: number) => {
     if (!selectedTable) return
-    
+    const item = selectedTable.pedido?.find(i => i.uid === itemUid)
+    if (!item) return
+
+    // REGLA ANTIFRAUDE: Si el ítem ya fue enviado a cocina y se quiere reducir/eliminar, 
+    // requiere PIN de supervisor + motivo.
+    if (delta < 0 && item.enviado) {
+      setPendingCancel({ itemUid, delta, motivo: '' })
+      setShowCancelReason(true)
+      return
+    }
+
+    ejecutarUpdateItemQty(itemUid, delta)
+  }
+
+  const ejecutarUpdateItemQty = (itemUid: string, delta: number, supervisorId?: string, reason?: string) => {
+    if (!selectedTable) return
+
+    const itemBefore = selectedTable.pedido?.find(i => i.uid === itemUid)
     const pedido = selectedTable.pedido?.map(item => {
       if (item.uid === itemUid) {
         const newQty = item.cantidad + delta
@@ -919,83 +1380,233 @@ export default function POSRestaurant({ license }: { license: License }) {
     
     setTables(updatedTables)
     setSelectedTable(updatedTable)
+
+    // AUDITORÍA: Registrar acción si hubo intervención de supervisor
+    if (supervisorId) {
+      import('@/services/audit-service').then(({ AuditService }) => {
+        AuditService.recordAction({
+          tenantId: subscription.tenantId,
+          userId: currentUser?.id,
+          action: delta + itemBefore!.cantidad === 0 ? 'CANCEL_ITEM_POST_SEND' : 'REDUCE_ITEM_POST_SEND',
+          entityType: 'item',
+          entityId: itemUid,
+          dataBefore: itemBefore,
+          dataAfter: pedido?.find(i => i.uid === itemUid) || { status: 'cancelled' },
+          reason: reason,
+          authorizedBy: supervisorId
+        })
+      })
+    }
+  }
+
+  const handleConfirmCancelPostSend = () => {
+    if (!pendingCancel || !cancelReason) return
+    
+    requireAuth('anularPlato', () => {
+      // El PIN fue validado en confirmAuth, aquí solo ejecutamos
+      // Nota: confirmAuth ya limpia el estado de auth.
+      ejecutarUpdateItemQty(pendingCancel.itemUid, pendingCancel.delta, 'SUPERVISOR_ID', cancelReason)
+      setPendingCancel(null)
+      setShowCancelReason(false)
+      setCancelReason('')
+    })
   }
 
   const sendToKitchen = async () => {
-    if (!selectedTable || !selectedTable.pedido?.length) return
+    if (!selectedTable || !selectedTable.pedido?.some(i => !i.enviado)) return
     
-    const saleId = 'S' + Date.now()
-    const iva = orderTotal * 0.1
-    const { error } = await supabase.from('ventas').insert({
-      id: saleId,
-      tenant_id: 'demo-tenant',
-      mesa: selectedTable.numero.toString(),
-      total: orderTotal,
-      iva,
-      igtf: 0,
-      items: selectedTable.pedido.map(i => ({
-        itemId: i.id,
+    // 1. Asegurar un UUID válido para la orden. Si la mesa ya tiene uno lo usamos, si no lo creamos.
+    const orderId = (selectedTable as any).db_order_id || crypto.randomUUID()
+    const itemsToDeliver = selectedTable.pedido.filter(i => !i.enviado)
+    
+    try {
+      const { idbPut, enqueueSync } = await import('@/lib/idb.client')
+      
+      // 2. Crear o actualizar la cabecera de la orden primero
+      const orderData = {
+        id: orderId,
+        tenant_id: subscription.tenantId,
+        mesa: selectedTable.nombre || selectedTable.numero.toString(),
+        status: 'pending',
+        waiter_id: currentUser?.id,
+        ts_abierta: selectedTable.opened ? new Date(selectedTable.opened).toISOString() : new Date().toISOString()
+      }
+
+      await idbPut('pos_orders', orderData)
+      await enqueueSync('pos', 'pos_orders', 'upsert', orderData)
+
+      // 3. Preparar ítems con mapeo exacto al esquema de DB
+      const itemsData = itemsToDeliver.map(i => ({
+        id: crypto.randomUUID(), 
+        order_id: orderId,
+        menu_item_id: i.menu_item_id,
         nombre: i.nombre,
-        precio: i.precio,
+        precio_unitario: i.precio,
         cantidad: i.cantidad,
-        modificadores: i.modificadores,
-        nota: i.nota,
         subtotal: i.precio * i.cantidad,
-      })),
-      cajero: currentUser?.nombre || 'Demo',
-      created_at: new Date().toISOString(),
-      tipo: 'venta',
+        modificadores: [...(i.modsForced || []), ...(i.modsOptional || [])],
+        status: 'ordered',
+        created_at: new Date().toISOString()
+      }))
+
+      // Guardado local e intento de sync para cada ítem
+      for (const it of itemsData) {
+        await idbPut('pos_order_items', it)
+        await enqueueSync('pos', 'pos_order_items', 'upsert', it)
+      }
+
+      // 4. Actualizar estado local
+      const updatedTable = { 
+        ...selectedTable, 
+        db_order_id: orderId, // Persistimos el ID de DB en el estado local
+        pedido: selectedTable.pedido.map(i => i.enviado ? i : { ...i, enviado: true, sent_at: new Date() }) 
+      }
+      const updatedTables = tables.map(t => t.id === selectedTable.id ? updatedTable : t)
+      
+      setTables(updatedTables)
+      setSelectedTable(updatedTable)
+
+      // Registrar acción en auditoría
+      import('@/services/audit-service').then(({ AuditService }) => {
+        AuditService.recordAction({
+          tenantId: subscription.tenantId,
+          userId: currentUser?.id,
+          action: 'SEND_TO_KITCHEN',
+          entityType: 'order',
+          entityId: orderId,
+          dataAfter: { items_count: itemsData.length }
+        })
+      })
+
+    } catch (err) {
+      console.error('Error enviando a cocina:', err)
+      alert('Error crítico al procesar la comanda.')
+    }
+  }
+
+  const resendItem = async (itemUid: string) => {
+    if (!selectedTable) return
+    const item = selectedTable.pedido?.find(i => i.uid === itemUid)
+    if (!item) return
+
+    // Auditoría
+    import('@/services/audit-service').then(({ AuditService }) => {
+      AuditService.recordAction({
+        tenantId: subscription.tenantId,
+        userId: currentUser?.id,
+        action: 'RESEND_KITCHEN',
+        entityType: 'item',
+        entityId: item.uid,
+        reason: 'Reenvío solicitado por mesero'
+      })
     })
 
-    if (error) {
-      console.error('Error enviando a cocina:', error)
-      return
-    }
+    // Simular reenvío resaltado
+    console.log(`📠 REENVIANDO A COCINA: ${item.nombre}`)
+    setItemOpTarget(null)
+  }
 
-    const updatedTable = { ...selectedTable, pedido: selectedTable.pedido.map(i => ({ ...i, enviado: true })) }
-    const updatedTables = tables.map(t => t.id === selectedTable.id ? updatedTable : t)
-    setTables(updatedTables)
-    setSelectedTable(updatedTable)
+  const reprintItem = (itemUid: string) => {
+    console.log(`🖨️ REIMPRIMIENDO TICKET: ${itemUid}`)
+    setItemOpTarget(null)
+  }
+
+  const sendItemMsg = (itemUid: string, msg: string) => {
+    if (!msg.trim()) return
+    console.log(`💬 MENSAJE A COCINA [${itemUid}]: ${msg}`)
+    setItemOpTarget(null)
+    setItemMsgInput('')
+  }
+
+  const resendFullComanda = () => {
+    if (!selectedTable?.pedido?.length) return
+    console.log(`📠 REENVIANDO COMANDA COMPLETA: Mesa ${selectedTable.numero}`)
+    
+    // Auditoría
+    import('@/services/audit-service').then(({ AuditService }) => {
+      AuditService.recordAction({
+        tenantId: subscription.tenantId,
+        userId: currentUser?.id,
+        action: 'RESEND_FULL_COMANDA',
+        entityType: 'order',
+        entityId: selectedTable.id,
+        reason: 'Reenvío manual de comanda completa'
+      })
+    })
+
+    // Mostrar un toast rápido o feedback visual
+    alert('Comanda reenviada a cocina')
   }
 
   const processPayment = async () => {
     if (!selectedTable) return
     
-    const iva = orderTotal * 0.1
-    const igtf = selectedPayment === 'divisa' ? orderTotal * 0.03 : 0
-    const totalConImpuestos = orderTotal + iva + igtf
+    // Generar número de orden (correlativo corto para retiro)
+    const orderNum = (Date.now() % 1000).toString().padStart(3, '0')
+    const finalTotal = orderTotal + (orderTotal * 0.1) // Simulación IVA
 
-    const { error } = await supabase.from('ventas').insert({
-      id: 'V' + Date.now(),
-      tenant_id: 'demo-tenant',
-      mesa: selectedTable.numero.toString(),
-      total: totalConImpuestos,
-      iva,
-      igtf,
-      formasPago: [{ tipo: selectedPayment, monto: totalConImpuestos, montoUSD: selectedPayment === 'divisa' ? totalConImpuestos : 0 }],
-      items: selectedTable.pedido?.map(i => ({
-        itemId: i.id,
-        nombre: i.nombre,
-        precio: i.precio,
-        cantidad: i.cantidad,
-        subtotal: i.precio * i.cantidad,
-      })) || [],
-      cajero: currentUser?.nombre || 'Demo',
-      created_at: new Date().toISOString(),
-      tipo: 'venta',
-    })
+    try {
+      let cliente_id: string | null = null
 
-    if (error) {
-      console.error('Error procesando pago:', error)
-      return
+      // UPSERT Cliente si es registro rápido
+      if (selectedTable.cliente && typeof selectedTable.cliente === 'object' && selectedTable.cliente.id.startsWith('new_')) {
+        const c = selectedTable.cliente as any
+        const { data: newClient, error: clientErr } = await supabase
+          .from('clientes')
+          .upsert({
+            tenant_id: subscription.tenantId,
+            nombre: c.nombre,
+            tel: c.tel,
+            id_fiscal: c.id_fiscal,
+            direccion: c.direccion,
+          }, { onConflict: 'id_fiscal' })
+          .select('id')
+          .single()
+        
+        if (!clientErr && newClient) {
+          cliente_id = newClient.id
+        } else {
+          console.error('Error upserting client:', clientErr)
+        }
+      } else if (selectedTable.cliente && typeof selectedTable.cliente === 'object') {
+        cliente_id = selectedTable.cliente.id
+      }
+
+      const { error } = await supabase.from('ventas').insert({
+        id: crypto.randomUUID(),
+        tenant_id: subscription.tenantId,
+        mesa: selectedTable.nombre || selectedTable.numero.toString(),
+        cliente_id, // Link al cliente
+        total: finalTotal,
+        items: selectedTable.pedido?.map(i => ({
+          itemId: i.id,
+          nombre: i.nombre,
+          precio: i.precio,
+          cantidad: i.cantidad,
+          subtotal: i.precio * i.cantidad,
+        })) || [],
+        cajero: currentUser?.nombre || 'Demo',
+        created_at: new Date().toISOString(),
+        tipo: 'venta',
+        ts: Date.now()
+      })
+
+      if (error) throw error
+
+      setLastOrderNumber(orderNum)
+      setLastTotal(finalTotal)
+      setShowSuccess(true)
+      
+      // Liberar mesa
+      const updatedTable = { ...selectedTable, estado: 'libre' as TableStatus, pedido: [], monto: undefined }
+      const updatedTables = tables.map(t => t.id === selectedTable.id ? updatedTable : t)
+      setTables(updatedTables)
+      setSelectedTable(null)
+      setShowCobrar(false)
+    } catch (e) {
+      console.error('Error procesando pago:', e)
+      alert('Error al guardar la venta en la base de datos.')
     }
-
-    const updatedTable = { ...selectedTable, estado: 'libre' as TableStatus, pedido: [], monto: undefined }
-    const updatedTables = tables.map(t => t.id === selectedTable.id ? updatedTable : t)
-    setTables(updatedTables)
-    setSelectedTable(null)
-    setShowCobrar(false)
-    setCurrentView('mesas')
   }
 
   const renderMesasView = () => (
@@ -1005,25 +1616,27 @@ export default function POSRestaurant({ license }: { license: License }) {
           AMBIENTES
         </div>
         <div style={{ flex: 1, overflowY: 'auto', padding: 6 }}>
-          {AMBIENTES.map(amb => (
+          {zonas.map(zona => (
             <div
-              key={amb.id}
-              className={currentAmbiente === amb.id ? 'zk-amb-active' : ''}
-              onClick={() => { setCurrentAmbiente(amb.id); setMesaPagina(0) }}
+              key={zona.id}
+              className={currentZonaId === zona.id ? 'zk-amb-active' : ''}
+              onClick={() => { setCurrentZonaId(zona.id); setMesaPagina(0) }}
               style={{
                 display: 'flex', alignItems: 'center', gap: 9, padding: 10, borderRadius: 8,
                 cursor: 'pointer', border: '1px solid transparent', marginBottom: 3,
-                background: currentAmbiente === amb.id ? colors.greenDim : 'transparent',
-                borderColor: currentAmbiente === amb.id ? colors.greenB : 'transparent',
+                background: currentZonaId === zona.id ? colors.greenDim : 'transparent',
+                borderColor: currentZonaId === zona.id ? colors.greenB : 'transparent',
               }}
             >
-              <span style={{ fontSize: 18 }}>{amb.emoji}</span>
+              <div style={{ width: 24, height: 24, borderRadius: 4, background: colors.surface2, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>
+                {zona.image_url ? <img src={zona.image_url} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 4 }} /> : '🗺️'}
+              </div>
               <div>
-                <div style={{ fontSize: 12, fontWeight: 600, color: currentAmbiente === amb.id ? colors.green : colors.text }}>
-                  {amb.nombre}
+                <div style={{ fontSize: 12, fontWeight: 600, color: currentZonaId === zona.id ? colors.green : colors.text }}>
+                  {zona.nombre}
                 </div>
                 <div style={{ fontSize: 9, color: colors.textDim, fontFamily: 'DM Mono, monospace' }}>
-                  {tables.filter(t => t.ambiente === amb.id).length} mesas
+                  {tables.filter(t => t.zona_id === zona.id).length} mesas
                 </div>
               </div>
             </div>
@@ -1048,12 +1661,14 @@ export default function POSRestaurant({ license }: { license: License }) {
       <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', background: colors.bg, minHeight: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', borderBottom: `1px solid ${colors.border}`, background: colors.surface, flexShrink: 0 }}>
           <div style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 700, color: colors.text }}>
-            {AMBIENTES.find(a => a.id === currentAmbiente)?.emoji} {AMBIENTES.find(a => a.id === currentAmbiente)?.nombre}
+            {zonas.find(z => z.id === currentZonaId)?.nombre || 'Seleccione Zona'}
           </div>
           <div style={{ display: 'flex', gap: 16 }}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-              <span style={{ fontFamily: 'Fraunces, serif', fontSize: 18, fontWeight: 900, color: colors.text }}>{activeTables}</span>
-              <span style={{ fontSize: 8, fontFamily: 'DM Mono, monospace', color: colors.textDim, letterSpacing: 1 }}>activas</span>
+              <span style={{ fontFamily: 'Fraunces, serif', fontSize: 18, fontWeight: 900, color: colors.text }}>
+                {tables.filter(t => t.zona_id === currentZonaId && t.estado !== 'libre').length}
+              </span>
+              <span style={{ fontSize: 8, fontFamily: 'DM Mono, monospace', color: colors.textDim, letterSpacing: 1 }}>ocupadas</span>
             </div>
           </div>
         </div>
@@ -1102,7 +1717,20 @@ export default function POSRestaurant({ license }: { license: License }) {
           )
         })()}
         <div
-          style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, padding: 14, overflow: 'auto', flex: 1, alignContent: 'start', touchAction: 'pan-y' }}
+          style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(5, 1fr)', 
+            gridTemplateRows: 'repeat(5, 1fr)',
+            gap: 12, 
+            padding: 20, 
+            overflow: 'hidden', 
+            flex: 1, 
+            height: '100%',
+            width: '100%',
+            background: zonas.find(z => z.id === currentZonaId)?.image_url ? `linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url(${zonas.find(z => z.id === currentZonaId).image_url}) center/cover no-repeat` : colors.bg,
+            borderRadius: 16,
+            position: 'relative'
+          }}
           onTouchStart={(e) => { swipeRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY } }}
           onTouchEnd={(e) => {
             if (!swipeRef.current) return
@@ -1116,49 +1744,98 @@ export default function POSRestaurant({ license }: { license: License }) {
           }}
         >
           {(() => {
-            void tick
-            const totalPag = Math.max(1, Math.ceil(filteredTables.length / MESAS_POR_PAGINA))
-            const safePag = Math.min(mesaPagina, totalPag - 1)
-            const start = safePag * MESAS_POR_PAGINA
-            const pageTables = filteredTables.slice(start, start + MESAS_POR_PAGINA)
-            return pageTables.map(table => {
-              const statusStyle = getStatusColor(table.estado)
-              const elapsed = formatElapsed(table.opened)
-              return (
-                <div
-                  key={table.id}
-                  className="zk-mesa"
-                  onClick={() => handleTableClick(table)}
-                  style={{
-                    position: 'relative',
-                    borderRadius: 10, padding: '10px 8px', cursor: 'pointer',
-                    border: `2px solid ${statusStyle.border}`, textAlign: 'center',
-                    background: statusStyle.bg, width: '100%', minHeight: 100,
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                  }}
-                >
-                  {elapsed && (
-                    <div style={{ position: 'absolute', top: 5, left: 5, fontSize: 8, fontFamily: 'DM Mono, monospace', color: colors.textDim, background: 'rgba(0,0,0,0.3)', padding: '1px 4px', borderRadius: 3, lineHeight: 1.4 }}>
-                      ⏱ {elapsed}
+            const currentPage = mesaPagina + 1
+            const pageTables = tables.filter(t => t.zona_id === currentZonaId && t.grid_page === currentPage)
+            
+            // Renderizamos los 25 slots de la grilla 5x5
+            const cells = []
+            for (let y = 1; y <= 5; y++) {
+              for (let x = 1; x <= 5; x++) {
+                const table = pageTables.find(t => t.grid_x === x && t.grid_y === y)
+                if (table) {
+                  const statusStyle = getStatusColor(table.estado)
+                  const elapsed = formatElapsed(table.opened)
+                  cells.push(
+                    <div
+                      key={table.id}
+                      className="zk-mesa"
+                      onClick={() => handleTableClick(table)}
+                      style={{
+                        gridColumn: x,
+                        gridRow: y,
+                        position: 'relative',
+                        borderRadius: 12, padding: '10px 8px', cursor: 'pointer',
+                        border: `2px solid ${statusStyle.border}`, textAlign: 'center',
+                        background: statusStyle.bg, width: '100%', height: '100%',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                        boxShadow: table.estado !== 'libre' ? `0 8px 20px ${statusStyle.border}33` : 'none',
+                        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+                      }}
+                    >
+                      {elapsed && (() => {
+                        const elapsedColor = getElapsedColor(table.opened)
+                        return (
+                          <div style={{ position: 'absolute', top: 5, left: 5, fontSize: 9, fontFamily: 'DM Mono, monospace', color: elapsedColor, background: 'rgba(0,0,0,0.6)', padding: '2px 5px', borderRadius: 4, fontWeight: 700 }}>
+                            ⏱ {elapsed}
+                          </div>
+                        )
+                      })()}
+                      <div style={{ fontFamily: 'Fraunces, serif', fontSize: 42, fontWeight: 900, lineHeight: 1, marginBottom: 4 }}>
+                        {table.numero}
+                      </div>
+                      <div style={{ fontSize: 9, fontFamily: 'DM Mono, monospace', letterSpacing: 1, color: statusStyle.text, fontWeight: 700 }}>
+                        {getStatusLabel(table.estado).toUpperCase()}
+                      </div>
+                      {table.estado !== 'libre' && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center', marginTop: 6 }}>
+                          {table.monto !== undefined && (
+                            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 13, fontWeight: 800, color: colors.amber, background: 'rgba(0,0,0,0.4)', padding: '2px 8px', borderRadius: 6 }}>
+                              ${Number(table.monto).toFixed(2)}
+                            </div>
+                          )}
+                          {table.mesero && (
+                            <div style={{ fontSize: 9, fontWeight: 700, color: '#fff', background: 'rgba(0,0,0,0.5)', padding: '2px 6px', borderRadius: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                              👤 {table.mesero}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
-                  )}
-                  <div style={{ position: 'absolute', top: 6, right: 6, width: 8, height: 8, borderRadius: '50%', background: statusStyle.text }} />
-                  <div style={{ fontFamily: 'Fraunces, serif', fontSize: 20, fontWeight: 900, lineHeight: 1, marginBottom: 1 }}>
-                    {table.numero}
-                  </div>
-                  <div style={{ fontSize: 8, fontFamily: 'DM Mono, monospace', letterSpacing: 1, textTransform: 'uppercase', color: statusStyle.text }}>
-                    {getStatusLabel(table.estado)}
-                  </div>
-                  {table.monto !== undefined && (
-                    <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 10, fontWeight: 700, marginTop: 2, color: colors.orange }}>
-                      ${table.monto.toFixed(2)}
-                    </div>
-                  )}
-                </div>
-              )
-            })
+                  )
+                } else {
+                  // Celda vacía (el "Grill" táctil)
+                  cells.push(
+                    <div 
+                      key={`empty-${x}-${y}`} 
+                      style={{ gridColumn: x, gridRow: y, border: `1px dashed ${colors.border}`, borderRadius: 12, opacity: 0.15 }} 
+                    />
+                  )
+                }
+              }
+            }
+            return cells
           })()}
         </div>
+        {(() => {
+          const zoneTables = tables.filter(t => t.zona_id === currentZonaId)
+          const maxPage = Math.max(1, Math.max(...zoneTables.map(t => t.grid_page || 1)))
+          if (maxPage <= 1) return null
+          return (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 20, padding: '10px', background: colors.surface, borderTop: `1px solid ${colors.border}` }}>
+              <button 
+                onClick={() => setMesaPagina(p => Math.max(0, p - 1))}
+                disabled={mesaPagina === 0}
+                style={{ padding: '8px 20px', borderRadius: 8, border: `1px solid ${colors.border}`, background: colors.surface2, color: colors.text, opacity: mesaPagina === 0 ? 0.3 : 1, cursor: 'pointer' }}
+              >◀ Anterior</button>
+              <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 12 }}>PÁGINA {mesaPagina + 1} DE {maxPage}</span>
+              <button 
+                onClick={() => setMesaPagina(p => Math.min(maxPage - 1, p + 1))}
+                disabled={mesaPagina >= maxPage - 1}
+                style={{ padding: '8px 20px', borderRadius: 8, border: `1px solid ${colors.border}`, background: colors.surface2, color: colors.text, opacity: mesaPagina >= maxPage - 1 ? 0.3 : 1, cursor: 'pointer' }}
+              >Siguiente ▶</button>
+            </div>
+          )
+        })()}
         {filteredTables.length > MESAS_POR_PAGINA && (() => {
           const totalPag = Math.ceil(filteredTables.length / MESAS_POR_PAGINA)
           const safePag = Math.min(mesaPagina, totalPag - 1)
@@ -1252,7 +1929,7 @@ export default function POSRestaurant({ license }: { license: License }) {
     let n = 1
 
     if (nivel <= 5) {
-      items.push({ kind: 'key', node: renderRKey('Venta Directa', '🧾', String(n++), () => { /* TODO Fase 2 */ }, 'green') })
+      items.push({ kind: 'key', node: renderRKey('Venta Directa', '🧾', String(n++), iniciarVentaDirecta, 'green') })
       items.push({ kind: 'key', node: renderRKey('Cobrar Mesa', '💳', String(n++), () => { setCobroPagos([]); setCobroTipPct(0); setPagoPopup(null); setShowCobrar(true) }, 'orange') })
       items.push({ kind: 'key', node: renderRKey('Funciones Mesas', '⚡', String(n++), () => setShowFunciones(true), 'blue') })
       items.push({ kind: 'key', node: renderRKey('Asignar Cliente', '👤', String(n++), () => setShowCliente(true), 'blue') })
@@ -1324,8 +2001,25 @@ export default function POSRestaurant({ license }: { license: License }) {
                 <option key={t.id} value={t.id}>Mesa {t.numero}</option>
               ))}
             </select>
+            {selectedTable && selectedTable.estado !== 'libre' && (
+              <button
+                onClick={() => requireAuth('anularOrden', anularOrden)}
+                style={{ background: colors.redDim, border: `1px solid ${colors.redB}`, color: colors.red, borderRadius: 6, padding: '6px 10px', fontSize: 10, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+              >
+                🗑️ ANULAR
+              </button>
+            )}
           </div>
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
+            {selectedTable?.pedido?.some(i => i.enviado) && (
+              <button
+                onClick={resendFullComanda}
+                title="Reenviar toda la comanda a cocina"
+                style={{ background: colors.surface2, border: `1px solid ${colors.border}`, color: colors.orange, borderRadius: 6, padding: '4px 8px', fontSize: 9, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+              >
+                📠 REENVIAR TODO
+              </button>
+            )}
             {menuStep !== 'cats' && (
               <button
                 onClick={() => {
@@ -1357,13 +2051,15 @@ export default function POSRestaurant({ license }: { license: License }) {
                   onClick={() => selectCat(cat.id)}
                   style={{
                     display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', gap: 4,
-                    padding: 10, borderRadius: 12, cursor: 'pointer', background: colors.surface2,
-                    border: `2px solid ${colors.border}`, textAlign: 'center', height: 100,
+                    padding: 10, borderRadius: 12, cursor: 'pointer', 
+                    background: cat.image_url ? `linear-gradient(rgba(0,0,0,0.2), rgba(0,0,0,0.8)), url(${cat.image_url}) center/cover no-repeat` : colors.surface2,
+                    border: `2px solid ${colors.border}`, textAlign: 'center', height: 110,
                     transition: 'all 0.13s',
+                    position: 'relative', overflow: 'hidden'
                   }}
                 >
-                  <span style={{ fontSize: 26, lineHeight: 1 }}>{cat.emoji}</span>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: colors.text, lineHeight: 1.2 }}>{cat.nombre}</span>
+                  {!cat.image_url && <span style={{ fontSize: 26, lineHeight: 1 }}>{cat.emoji}</span>}
+                  <span style={{ fontSize: 13, fontWeight: 800, color: '#fff', lineHeight: 1.2, textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}>{cat.nombre}</span>
                 </div>
               ))}
             </div>
@@ -1410,18 +2106,20 @@ export default function POSRestaurant({ license }: { license: License }) {
                   key={item.id}
                   onClick={() => addToOrder(item)}
                   style={{
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', gap: 4,
-                    padding: 10, borderRadius: 10, cursor: 'pointer', background: colors.surface2,
-                    border: `2px solid ${colors.border}`, textAlign: 'center', height: 90,
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', gap: 2,
+                    padding: 10, borderRadius: 10, cursor: 'pointer', 
+                    background: item.image_url ? `linear-gradient(rgba(0,0,0,0.1), rgba(0,0,0,0.85)), url(${item.image_url}) center/cover no-repeat` : colors.surface2,
+                    border: `2px solid ${colors.border}`, textAlign: 'center', height: 100,
                     transition: 'all 0.13s',
                     opacity: item.agotado ? 0.4 : 1,
+                    position: 'relative', overflow: 'hidden'
                   }}
                 >
-                  <span style={{ fontSize: 22, lineHeight: 1 }}>{item.emoji || '🍽️'}</span>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: colors.text, lineHeight: 1.2, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', maxWidth: '100%' }}>
+                  {!item.image_url && <span style={{ fontSize: 22, lineHeight: 1 }}>{item.emoji || '🍽️'}</span>}
+                  <span style={{ fontSize: 11, fontWeight: 800, color: '#fff', lineHeight: 1.1, textShadow: '0 2px 4px rgba(0,0,0,0.8)', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
                     {item.nombre}
                   </span>
-                  <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 11, color: colors.orange, fontWeight: 700 }}>
+                  <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 11, color: colors.orange, fontWeight: 800, textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}>
                     ${item.precio.toFixed(2)}
                   </span>
                   {item.agotado && (
@@ -1546,7 +2244,7 @@ export default function POSRestaurant({ license }: { license: License }) {
             </div>
           </div>
           {selectedTable?.opened && (
-            <div style={{ fontSize: 10, fontFamily: 'DM Mono, monospace', color: colors.textDim }}>
+            <div style={{ fontSize: 10, fontFamily: 'DM Mono, monospace', color: getElapsedColor(selectedTable.opened), fontWeight: 700 }}>
               ⏱ {formatElapsed(selectedTable.opened) || '—'}
             </div>
           )}
@@ -1558,29 +2256,66 @@ export default function POSRestaurant({ license }: { license: License }) {
               Sin ítems.<br />Selecciona un plato para agregarlo.
             </div>
           ) : currentOrder.map(item => (
-            <div key={item.uid} style={{ padding: '8px 10px', marginBottom: 4, borderRadius: 8, background: item.enviado ? colors.surface : colors.surface2, border: `1px solid ${item.enviado ? colors.greenB : colors.border}` }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-                <span style={{ fontFamily: 'Fraunces, serif', fontSize: 14, fontWeight: 700, color: colors.orange, minWidth: 26 }}>{item.cantidad}×</span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, color: colors.text, fontWeight: 600, lineHeight: 1.25 }}>{item.nombre}</div>
-                  {(item.modsForced?.length || item.modsOptional?.length) ? (
-                    <div style={{ fontSize: 10, color: colors.textMid, marginTop: 2, lineHeight: 1.3 }}>
-                      {[...(item.modsForced || []), ...(item.modsOptional || [])].map(m => `${m.tipo === 'sin' ? '❌' : '➕'} ${m.nombre}`).join(' · ')}
-                    </div>
-                  ) : null}
-                  {item.nota && (
-                    <div style={{ fontSize: 10, color: colors.amber, marginTop: 2, fontStyle: 'italic' }}>📝 {item.nota}</div>
-                  )}
+            <div key={item.uid} style={{ position: 'relative', background: colors.surface2, borderRadius: 10, padding: 10, border: `1px solid ${item.enviado ? colors.border : colors.orangeB}`, marginBottom: 6, opacity: item.enviado ? 0.75 : 1 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 13, fontWeight: 700, color: colors.orange }}>{item.cantidad}x</span>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: colors.text }}>{item.nombre}</div>
+                    {item.modificadores && item.modificadores.length > 0 && <div style={{ fontSize: 9, color: colors.orange, fontFamily: 'DM Mono, monospace' }}>{item.modificadores.map(m => m.nombre).join(', ')}</div>}
+                    {item.nota && <div style={{ fontSize: 9, color: colors.textDim, fontStyle: 'italic', marginTop: 2 }}>"{item.nota}"</div>}
+                  </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 12, fontWeight: 700, color: colors.text }}>${(item.precio * item.cantidad).toFixed(2)}</div>
-                  {item.enviado && <div style={{ fontSize: 8, fontFamily: 'DM Mono, monospace', color: colors.green, marginTop: 2 }}>✓ ENVIADO</div>}
+                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 13, fontWeight: 700, color: colors.text }}>${(item.precio * item.cantidad).toFixed(2)}</div>
+                  {item.enviado ? (
+                    <div 
+                      onClick={() => setItemOpTarget(item.uid)}
+                      style={{ fontSize: 8, color: colors.green, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 3, justifyContent: 'flex-end', marginTop: 4, cursor: 'pointer' }}
+                    >
+                      ENVIADO {itemOpTarget === item.uid ? '▼' : '⚙️'}
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                      <button
+                        onClick={() => updateItemQty(item.uid, -1)}
+                        style={{ width: 18, height: 18, borderRadius: 4, border: `1px solid ${colors.border}`, background: colors.surface, color: colors.textMid, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}
+                      >–</button>
+                      <button
+                        onClick={() => updateItemQty(item.uid, 1)}
+                        style={{ width: 18, height: 18, borderRadius: 4, border: `1px solid ${colors.border}`, background: colors.surface, color: colors.textMid, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}
+                      >+</button>
+                    </div>
+                  )}
                 </div>
               </div>
-              {!item.enviado && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6, justifyContent: 'flex-end' }}>
-                  <button onClick={() => updateItemQty(item.uid, -1)} style={{ width: 24, height: 24, borderRadius: 5, border: `1px solid ${colors.border2}`, background: colors.surface, color: colors.text, cursor: 'pointer', fontSize: 14, lineHeight: 1 }}>−</button>
-                  <button onClick={() => updateItemQty(item.uid, 1)} style={{ width: 24, height: 24, borderRadius: 5, border: `1px solid ${colors.border2}`, background: colors.surface, color: colors.text, cursor: 'pointer', fontSize: 14, lineHeight: 1 }}>+</button>
+
+              {itemOpTarget === item.uid && (
+                <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px dotted ${colors.border}`, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                    <button onClick={() => reprintItem(item.uid)} style={{ padding: '6px', fontSize: 9, borderRadius: 5, border: `1px solid ${colors.border}`, background: colors.surface, color: colors.text, cursor: 'pointer' }}>🖨️ Reimprimir</button>
+                    <button onClick={() => resendItem(item.uid)} style={{ padding: '6px', fontSize: 9, borderRadius: 5, border: `1px solid ${colors.border}`, background: colors.surface, color: colors.text, cursor: 'pointer' }}>📠 Reenviar</button>
+                  </div>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <input 
+                      placeholder="Msg a cocina..."
+                      value={itemMsgInput}
+                      onChange={(e) => setItemMsgInput(e.target.value)}
+                      style={{ flex: 1, padding: '6px 8px', fontSize: 10, borderRadius: 5, border: `1px solid ${colors.border}`, background: colors.surface, color: colors.text, outline: 'none' }}
+                    />
+                    <button onClick={() => sendItemMsg(item.uid, itemMsgInput)} style={{ padding: '0 10px', borderRadius: 5, border: 'none', background: colors.blue, color: '#fff', fontSize: 10, cursor: 'pointer' }}>OK</button>
+                  </div>
+                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                      {['¡Urgente!', 'Prioridad', 'Para llevar'].map(m => (
+                        <span 
+                          key={m} 
+                          onClick={() => sendItemMsg(item.uid, m)}
+                          style={{ fontSize: 8, padding: '2px 6px', background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: 4, cursor: 'pointer', color: colors.textDim }}
+                        >
+                          {m}
+                        </span>
+                      ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -1588,11 +2323,23 @@ export default function POSRestaurant({ license }: { license: License }) {
         </div>
 
         <div style={{ padding: '10px 14px', borderTop: `1px solid ${colors.border}`, background: colors.surface, flexShrink: 0 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-            <span style={{ fontSize: 10, fontFamily: 'DM Mono, monospace', letterSpacing: 2, color: colors.textDim }}>SUBTOTAL</span>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontFamily: 'Fraunces, serif', fontSize: 18, fontWeight: 700, color: colors.orange }}>${orderTotal.toFixed(2)}</div>
-              <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 10, color: colors.textDim }}>Bs {(orderTotal * tasaBCV).toLocaleString('es-VE', { maximumFractionDigits: 2 })}</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+              <span style={{ fontSize: 9, fontFamily: 'DM Mono, monospace', color: colors.textDim }}>SUBTOTAL</span>
+              <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 13, color: colors.textMid }}>${orderTotal.toFixed(2)}</span>
+            </div>
+            {posSettings?.impuestos_activos && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <span style={{ fontSize: 9, fontFamily: 'DM Mono, monospace', color: colors.textDim }}>IVA ({(posSettings?.iva_porcentaje || 0)}%)</span>
+                <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 13, color: colors.textMid }}>${(orderTotal * (posSettings?.iva_porcentaje || 0) / 100).toFixed(2)}</span>
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 4, paddingTop: 4, borderTop: `1px solid ${colors.border}` }}>
+              <span style={{ fontSize: 10, fontFamily: 'DM Mono, monospace', letterSpacing: 2, color: colors.orange, fontWeight: 700 }}>TOTAL</span>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontFamily: 'Fraunces, serif', fontSize: 20, fontWeight: 900, color: colors.orange }}>${(orderTotal * (1 + (posSettings?.impuestos_activos ? (posSettings?.iva_porcentaje || 0) / 100 : 0))).toFixed(2)}</div>
+                <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 10, color: colors.textDim }}>Bs {(orderTotal * (1 + (posSettings?.impuestos_activos ? (posSettings?.iva_porcentaje || 0) / 100 : 0)) * tasaBCV).toFixed(2)}</div>
+              </div>
             </div>
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
@@ -1653,22 +2400,133 @@ export default function POSRestaurant({ license }: { license: License }) {
 
   const eliminarPago = (idx: number) => setCobroPagos(prev => prev.filter((_, i) => i !== idx))
 
-  const confirmarCobro = () => {
-    if (!cobroPagos.length) return
-    const sub = currentOrder.reduce((s, i) => s + i.precio * i.cantidad, 0)
-    const total = sub * 1.10 + sub * (cobroTipPct / 100)
-    const pagado = cobroPagos.reduce((s, p) => s + p.montoUSD, 0)
-    if (total - pagado > 0.005) return
-    if (selectedTable) {
+  const confirmarCobro = async () => {
+    if (!cobroPagos.length || !selectedTable) return
+    
+    // 1. Cálculos Finales
+    const subtotal = selectedTable.pedido?.reduce((s, i) => s + i.precio * i.cantidad, 0) || 0
+    const impuestos = subtotal * 0.10 // Según config, por ahora 10% demo
+    const propinas = subtotal * (cobroTipPct / 100)
+    const totalUSD = subtotal + impuestos + propinas
+    const pagadoUSD = cobroPagos.reduce((s, p) => s + p.montoUSD, 0)
+    
+    if (totalUSD - pagadoUSD > 0.005) {
+      alert('El monto pagado no cubre el total de la cuenta.')
+      return
+    }
+
+    const orderId = self.crypto.randomUUID()
+    
+    // 2. Preparar Datos para Supabase / IndexedDB Sync (Siguiendo 010_advanced_pos.sql)
+    const orderData = {
+      id: orderId,
+      tenant_id: subscription.tenantId,
+      session_id: currentSession?.id || null, // Nulo si no hay sesión activa (evita error UUID)
+      waiter_id: currentUser?.id,
+      mesa: selectedTable?.id || 'Mesa 0',
+      status: 'paid', // Valor válido del enum pos_order_status
+      subtotal,
+      impuestos,
+      propinas,
+      total: totalUSD,
+      ts_abierta: selectedTable.opened ? new Date(selectedTable.opened).toISOString() : new Date().toISOString(),
+      ts_cerrada: new Date().toISOString(),
+      created_at: new Date().toISOString()
+    }
+
+    const itemsData = (selectedTable.pedido || []).map(i => ({
+      id: self.crypto.randomUUID(),
+      order_id: orderId,
+      menu_item_id: i.id,
+      nombre: i.nombre,
+      precio_unitario: i.precio,
+      cantidad: i.cantidad,
+      subtotal: i.precio * i.cantidad,
+      modificadores: i.modificadores || [],
+      status: 'delivered', // Valor válido del enum pos_item_status
+      created_at: new Date().toISOString()
+    }))
+
+    const paymentsData = cobroPagos.map(p => ({
+      id: self.crypto.randomUUID(),
+      order_id: orderId,
+      metodo: p.nombre, 
+      monto_usd: p.montoUSD,
+      monto_local: p.montoUSD * tasaBCV,
+      tasa_cambio: tasaBCV,
+      created_at: new Date().toISOString()
+    }))
+
+    try {
+      // 3. Guardado Offline-First con SyncQueue
+      const { enqueueSync, idbPut } = await import('@/lib/idb.client')
+      
+      // Upsert local para respuesta instantánea
+      await idbPut('pos_orders', orderData)
+      for (const it of itemsData) await idbPut('pos_order_items', it)
+      
+      // Encolar para sincronización real con Supabase
+      await enqueueSync('pos', 'pos_orders', 'upsert', orderData)
+      for (const it of itemsData) await enqueueSync('pos', 'pos_order_items', 'upsert', it)
+      for (const py of paymentsData) await enqueueSync('pos', 'pos_payments', 'upsert', py)
+      
+      // 4. Liberar mesa y limpiar estado
       setTables(prev => prev.map(t => t.id === selectedTable.id
         ? { ...t, estado: 'libre' as TableStatus, pedido: undefined, monto: undefined, opened: undefined, cliente: undefined }
         : t))
+        
+      setShowCobrar(false)
+      setCobroPagos([])
+      setCobroTipPct(0)
+      setSelectedTable(null)
+      setCurrentView('mesas')
+      setShowSuccess(true)
+      setLastOrderNumber(orderId.slice(-4).toUpperCase())
+      setLastTotal(totalUSD)
+
+    } catch (err) {
+      console.error('Error procesando cobro avanzado:', err)
+      alert('Error al procesar la transacción.')
     }
-    setShowCobrar(false)
-    setCobroPagos([])
-    setCobroTipPct(0)
-    setSelectedTable(null)
-    setCurrentView('mesas')
+  }
+
+  const renderCancelReasonModal = () => {
+    if (!showCancelReason || !pendingCancel) return null
+    const item = selectedTable?.pedido?.find(i => i.uid === pendingCancel.itemUid)
+    return (
+      <div style={{ position: 'fixed', inset: 0, zIndex: 850, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ background: colors.surface, border: `2px solid ${colors.red}`, borderRadius: 16, padding: 24, width: '100%', maxWidth: 360, textAlign: 'center' }}>
+          <div style={{ fontSize: 32, marginBottom: 8 }}>⚠️</div>
+          <div style={{ fontFamily: 'Fraunces, serif', fontSize: 18, fontWeight: 700, color: colors.text, marginBottom: 8 }}>Anulación de Ítem</div>
+          <div style={{ fontSize: 12, color: colors.textDim, marginBottom: 16 }}>
+            Confirmar anulación de: <br/>
+            <strong style={{ color: colors.text }}>{item?.nombre}</strong>
+          </div>
+          
+          <div style={{ textAlign: 'left', marginBottom: 16 }}>
+             <label style={{ fontSize: 10, fontFamily: 'DM Mono, monospace', color: colors.textDim, letterSpacing: 1, textTransform: 'uppercase' }}>Motivo de la Anulación</label>
+             <textarea 
+               value={cancelReason}
+               onChange={(e) => setCancelReason(e.target.value)}
+               placeholder="Explica por qué se anula este plato..."
+               style={{ width: '100%', padding: 12, borderRadius: 8, border: `1px solid ${colors.border}`, background: colors.surface2, color: colors.text, fontSize: 13, outline: 'none', resize: 'none', height: 80, marginTop: 4 }}
+             />
+          </div>
+
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button 
+              onClick={() => { setShowCancelReason(false); setPendingCancel(null); setCancelReason('') }}
+              style={{ flex: 1, padding: 12, borderRadius: 8, border: `1px solid ${colors.border}`, background: 'transparent', color: colors.textDim, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+            >Cancelar</button>
+            <button 
+              onClick={handleConfirmCancelPostSend}
+              disabled={!cancelReason.trim()}
+              style={{ flex: 1, padding: 12, borderRadius: 8, border: 'none', background: cancelReason.trim() ? colors.red : colors.surface2, color: cancelReason.trim() ? '#fff' : colors.textDim, fontSize: 13, fontWeight: 700, cursor: cancelReason.trim() ? 'pointer' : 'not-allowed' }}
+            >Siguiente (PIN) →</button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   const renderPagoPopup = () => {
@@ -2026,23 +2884,32 @@ export default function POSRestaurant({ license }: { license: License }) {
             </div>
           </Card>
 
-          <Card title="💳 Ingresos por Forma de Pago">
+          <Card title={cortexStep === 'conteo' ? "💳 Conteo por Forma de Pago" : "💳 Resultados de Cuadre"}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: colors.surface2 }}>
-                  {['Forma de Pago', 'Sistema ($)', 'Contado ($)', 'Diferencia'].map(h => (
-                    <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 9, fontFamily: 'DM Mono, monospace', letterSpacing: 1, color: colors.textDim, fontWeight: 600 }}>{h}</th>
-                  ))}
+                  <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 9, fontFamily: 'DM Mono, monospace', letterSpacing: 1, color: colors.textDim }}>FORMA DE PAGO</th>
+                  {cortexStep === 'resultado' && (
+                    <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 9, fontFamily: 'DM Mono, monospace', letterSpacing: 1, color: colors.textDim }}>SISTEMA ($)</th>
+                  )}
+                  <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 9, fontFamily: 'DM Mono, monospace', letterSpacing: 1, color: colors.textDim }}>CONTADO ($)</th>
+                  {cortexStep === 'resultado' && (
+                    <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 9, fontFamily: 'DM Mono, monospace', letterSpacing: 1, color: colors.textDim }}>DIFERENCIA</th>
+                  )}
                 </tr>
               </thead>
               <tbody>
                 <tr>
                   <td style={{ padding: '8px 12px', fontSize: 12, color: colors.text, borderBottom: `1px solid ${colors.border}` }}>💵 Efectivo (USD+Bs)</td>
-                  <td style={{ padding: '8px 12px', fontFamily: 'DM Mono, monospace', fontSize: 12, color: colors.textMid, borderBottom: `1px solid ${colors.border}` }}>${efectivoSistema.toFixed(2)}</td>
+                  {cortexStep === 'resultado' && (
+                    <td style={{ padding: '8px 12px', fontFamily: 'DM Mono, monospace', fontSize: 12, color: colors.textMid, borderBottom: `1px solid ${colors.border}` }}>${efectivoSistema.toFixed(2)}</td>
+                  )}
                   <td style={{ padding: '8px 12px', fontFamily: 'DM Mono, monospace', fontSize: 12, color: colors.green, borderBottom: `1px solid ${colors.border}` }}>${totalEfectivoContado.toFixed(2)}</td>
-                  <td style={{ padding: '8px 12px', fontFamily: 'DM Mono, monospace', fontSize: 12, fontWeight: 700, color: Math.abs(efectivoDif) < 0.01 ? colors.green : colors.amber, borderBottom: `1px solid ${colors.border}` }}>
-                    {efectivoDif >= 0 ? '+' : ''}${efectivoDif.toFixed(2)}
-                  </td>
+                  {cortexStep === 'resultado' && (
+                    <td style={{ padding: '8px 12px', fontFamily: 'DM Mono, monospace', fontSize: 12, fontWeight: 700, color: Math.abs(efectivoDif) < 0.01 ? colors.green : colors.red, borderBottom: `1px solid ${colors.border}` }}>
+                      {efectivoDif >= 0 ? '+' : ''}${efectivoDif.toFixed(2)}
+                    </td>
+                  )}
                 </tr>
                 {formasContadas.map(([id, sys]) => {
                   const forma = metodosPago.find(f => f.id === id)
@@ -2051,29 +2918,39 @@ export default function POSRestaurant({ license }: { license: License }) {
                   return (
                     <tr key={id}>
                       <td style={{ padding: '8px 12px', fontSize: 12, color: colors.text, borderBottom: `1px solid ${colors.border}` }}>{forma?.emoji} {forma?.label || id}</td>
-                      <td style={{ padding: '8px 12px', fontFamily: 'DM Mono, monospace', fontSize: 12, color: colors.textMid, borderBottom: `1px solid ${colors.border}` }}>${sys.toFixed(2)}</td>
+                      {cortexStep === 'resultado' && (
+                        <td style={{ padding: '8px 12px', fontFamily: 'DM Mono, monospace', fontSize: 12, color: colors.textMid, borderBottom: `1px solid ${colors.border}` }}>${sys.toFixed(2)}</td>
+                      )}
                       <td style={{ padding: '8px 12px', borderBottom: `1px solid ${colors.border}` }}>
-                        <input
-                          type="number" step="0.01" placeholder="0.00"
-                          value={contado || ''}
-                          onChange={(e) => setCortexFpagoContado(prev => ({ ...prev, [id]: parseFloat(e.target.value) || 0 }))}
-                          style={{ width: 90, background: colors.surface2, border: `1px solid ${colors.border}`, borderRadius: 5, padding: '4px 7px', color: colors.text, fontFamily: 'DM Mono, monospace', fontSize: 12, textAlign: 'right', outline: 'none' }}
-                        />
+                        {cortexStep === 'conteo' ? (
+                          <input
+                            type="number" step="0.01" placeholder="0.00"
+                            value={contado || ''}
+                            onChange={(e) => setCortexFpagoContado(prev => ({ ...prev, [id]: parseFloat(e.target.value) || 0 }))}
+                            style={{ width: 90, background: colors.surface2, border: `1px solid ${colors.border}`, borderRadius: 5, padding: '4px 7px', color: colors.text, fontFamily: 'DM Mono, monospace', fontSize: 12, textAlign: 'right', outline: 'none' }}
+                          />
+                        ) : (
+                          <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 12, color: colors.text }}>${contado.toFixed(2)}</span>
+                        )}
                       </td>
-                      <td style={{ padding: '8px 12px', fontFamily: 'DM Mono, monospace', fontSize: 12, fontWeight: 700, color: Math.abs(dif) < 0.01 ? colors.green : colors.amber, borderBottom: `1px solid ${colors.border}` }}>
-                        {dif >= 0 ? '+' : ''}${dif.toFixed(2)}
-                      </td>
+                      {cortexStep === 'resultado' && (
+                        <td style={{ padding: '8px 12px', fontFamily: 'DM Mono, monospace', fontSize: 12, fontWeight: 700, color: Math.abs(dif) < 0.01 ? colors.green : colors.red, borderBottom: `1px solid ${colors.border}` }}>
+                          {dif >= 0 ? '+' : ''}${dif.toFixed(2)}
+                        </td>
+                      )}
                     </tr>
                   )
                 })}
               </tbody>
             </table>
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', borderTop: `1px solid ${colors.border}` }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: colors.text }}>TOTAL DIFERENCIA</span>
-              <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 14, fontWeight: 700, color: Math.abs(totalDifFormas) < 0.01 ? colors.green : colors.amber }}>
-                {totalDifFormas >= 0 ? '+' : ''}${totalDifFormas.toFixed(2)}
-              </span>
-            </div>
+            {cortexStep === 'resultado' && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', borderTop: `2px solid ${colors.border}`, background: colors.surface2 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: colors.text }}>TOTAL DIFERENCIA REGISTRADA</span>
+                <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 14, fontWeight: 700, color: Math.abs(totalDifFormas) < 0.01 ? colors.green : colors.red }}>
+                  {totalDifFormas >= 0 ? '+' : ''}${totalDifFormas.toFixed(2)}
+                </span>
+              </div>
+            )}
           </Card>
 
           <Card title="📋 Movimientos del Turno">
@@ -2122,14 +2999,41 @@ export default function POSRestaurant({ license }: { license: License }) {
             />
           </div>
           <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 8, marginTop: 'auto' }}>
-            <button
-              onClick={() => window.print()}
-              style={{ width: '100%', padding: '10px 14px', borderRadius: 7, border: `1px solid ${colors.border}`, background: 'transparent', color: colors.textMid, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
-            >🖨️ Imprimir Reporte X</button>
-            <button
-              onClick={close}
-              style={{ width: '100%', padding: 14, borderRadius: 7, border: 'none', background: colors.orange, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
-            >✅ Confirmar Corte X</button>
+            {cortexStep === 'conteo' ? (
+              <button
+                onClick={() => {
+                  setCortexStep('resultado')
+                  // AUDITORÍA: Registrar el cierre con los montos contados vs sistema
+                  import('@/services/audit-service').then(({ AuditService }) => {
+                    AuditService.recordAction({
+                      tenantId: subscription.tenantId,
+                      userId: currentUser?.id,
+                      action: 'BLIND_CASH_COUNT',
+                      entityType: 'session',
+                      entityId: currentSession?.id || 'new',
+                      dataBefore: { system: SISTEMA_FPAGO_DEMO },
+                      dataAfter: { counted: { efectivos: totalEfectivoContado, ...cortexFpagoContado }, gap: totalDifFormas },
+                      reason: cortexObs
+                    })
+                    if (Math.abs(totalDifFormas) > 5) { // Alerta si > $5
+                      AuditService.triggerAlert('Gap detectado en Cierre de Caja', `Diferencia total: $${totalDifFormas.toFixed(2)}`, 'high')
+                    }
+                  })
+                }}
+                style={{ width: '100%', padding: 14, borderRadius: 7, border: 'none', background: colors.green, color: '#000', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+              >🚀 Finalizar Conteo y Cuadrar</button>
+            ) : (
+              <>
+                <button
+                  onClick={() => window.print()}
+                  style={{ width: '100%', padding: '10px 14px', borderRadius: 7, border: `1px solid ${colors.border}`, background: 'transparent', color: colors.textMid, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                >🖨️ Imprimir Reporte X</button>
+                <button
+                  onClick={close}
+                  style={{ width: '100%', padding: 14, borderRadius: 7, border: 'none', background: colors.orange, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+                >✅ Confirmar y Salir</button>
+              </>
+            )}
             <button
               onClick={close}
               style={{ width: '100%', padding: '8px 14px', borderRadius: 7, border: `1px solid ${colors.border}`, background: 'transparent', color: colors.textMid, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
@@ -2700,6 +3604,7 @@ export default function POSRestaurant({ license }: { license: License }) {
           <ActBtn icon="🖨️" label="Nota de Consumo" sub="Pre-cuenta" onClick={() => { close(); setShowNotaConsumo(true) }} />
           <ActBtn icon="🎫" label="Descuento" sub="Aplicar % a la cuenta" onClick={() => { close(); setDescuentoPct(0); setShowDescuento(true) }} />
           <ActBtn icon="🏦" label="Cuentas Banco" sub="Para depósitos" onClick={() => { close(); setEditCuenta(null); setShowCuentas(true) }} />
+          <ActBtn icon="⚠️" label="Anular Orden" sub="Liberar mesa (Admin)" color={colors.redB} onClick={() => { close(); requireAuth('anularOrden', anularOrden) }} />
         </div>
       </ModalShell>
     )
@@ -2945,64 +3850,76 @@ export default function POSRestaurant({ license }: { license: License }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: colors.bg, color: colors.text, overflow: 'hidden' }}>
-      <div style={{ height: 52, background: colors.topbar, borderBottom: `2px solid ${colors.border}`, display: 'flex', alignItems: 'center', padding: '0 14px', gap: 12, flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-          <div style={{ width: 32, height: 32, borderRadius: 8, background: colors.orange, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>
-            🍽️
-          </div>
-          <div>
-            <div style={{ fontFamily: 'Fraunces, serif', fontSize: 13, fontWeight: 900, color: colors.text }}>POS RESTAURANT</div>
-            <div style={{ fontSize: 8, fontFamily: 'DM Mono, monospace', letterSpacing: 2, color: colors.textDim }}>ZYTEK CLOUD ERP</div>
+      <div style={{ height: 52, background: colors.topbar, borderBottom: `2px solid ${colors.border}`, display: 'flex', alignItems: 'center', padding: '0 16px', gap: 20, flexShrink: 0 }}>
+        {/* IZQUIERDA: MARCA */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 0, minWidth: 140 }}>
+          <div style={{ fontSize: 16, fontWeight: 900, color: colors.orange, fontFamily: 'Fraunces, serif', lineHeight: 1.1 }}>Zytek OS Rest</div>
+          <div style={{ fontSize: 10, fontFamily: 'DM Mono, monospace', color: colors.textMid, letterSpacing: 2, textTransform: 'uppercase', fontWeight: 700, marginTop: 1 }}>Zytek llc</div>
+        </div>
+
+        {/* CENTRO: NEGOCIO */}
+        <div style={{ flex: 1, display: 'flex', justifyContent: 'center', pointerEvents: 'none' }}>
+          <div className="zk-business-name" style={{ fontFamily: 'Fraunces, serif', fontSize: 20, fontWeight: 900, color: colors.text, textAlign: 'center', textTransform: 'uppercase', letterSpacing: 1 }}>
+            {subscription.tenantName || 'RESTAURANTE'}
           </div>
         </div>
-        
-        <span style={{ fontSize: 10, fontFamily: 'DM Mono, monospace', padding: '3px 8px', borderRadius: 20, border: '1px solid', background: colors.greenDim, borderColor: colors.greenB, color: colors.green }}>
-          ● {activeCount}/{totalTables} mesas
-        </span>
 
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+        {/* DERECHA: WIDGETS */}
+        <div className="zk-topbar-widgets" style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+          {/* Mesas Pill */}
+          <span style={{ fontSize: 10, fontFamily: 'DM Mono, monospace', padding: '4px 10px', borderRadius: 20, border: '1px solid', background: colors.greenDim, borderColor: colors.greenB, color: colors.green, whiteSpace: 'nowrap' }}>
+            ● {activeCount}/{totalTables} mesas
+          </span>
+
           {paisCfg.dual && (
             <div
-              title={`${paisCfg.tasaLabel} · click para actualizar (requiere supervisor)`}
+              title={`${paisCfg.tasaLabel} · click para actualizar`}
               onClick={() => requireAuth('actualizarTasa', () => { setTasaInput(String(tasaBCV)); setShowTasaModal(true) })}
-              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: colors.surface2, border: `1px solid ${colors.border}`, borderRadius: 8, padding: '3px 10px', cursor: 'pointer', minWidth: 78 }}
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: colors.surface2, border: `1px solid ${colors.border}`, borderRadius: 8, padding: '2px 10px', cursor: 'pointer', minWidth: 70 }}
             >
-              <div style={{ fontSize: 7, fontFamily: 'DM Mono, monospace', letterSpacing: 2, color: colors.textDim }}>{paisCfg.tasaLabel}</div>
-              <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 15, fontWeight: 700, color: colors.cyan, lineHeight: 1.1 }}>{tasaBCV.toFixed(2)}</div>
-              <div style={{ fontSize: 7, fontFamily: 'DM Mono, monospace', color: colors.textDim, letterSpacing: 1 }}>{paisCfg.simbolo}/$ · manual</div>
+              <div style={{ fontSize: 7, fontFamily: 'DM Mono, monospace', color: colors.textDim }}>{paisCfg.tasaLabel}</div>
+              <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 13, fontWeight: 700, color: colors.cyan, lineHeight: 1 }}>{tasaBCV.toFixed(2)}</div>
             </div>
           )}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 56 }}>
-            <div style={{ fontSize: 9, fontFamily: 'DM Mono, monospace', color: colors.textDim, letterSpacing: 1 }}>{clock.date}</div>
-            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 14, fontWeight: 600, color: colors.text, lineHeight: 1.1 }}>{clock.time}</div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', borderLeft: `1px solid ${colors.border}`, paddingLeft: 10 }}>
+            <div style={{ fontSize: 8, fontFamily: 'DM Mono, monospace', color: colors.textDim }}>{clock.date}</div>
+            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 13, fontWeight: 600, color: colors.text, lineHeight: 1 }}>{clock.time}</div>
           </div>
+
           <button
             onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
-            style={{ width: 28, height: 28, borderRadius: 6, border: `1px solid ${colors.border}`, background: 'transparent', color: colors.amber, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+            style={{ width: 28, height: 28, borderRadius: 6, border: `1px solid ${colors.border}`, background: 'transparent', color: colors.amber, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           >
             {theme === 'dark' ? '☀️' : '🌙'}
           </button>
+
+          <button
+            onClick={toggleFullScreen}
+            title="Pantalla Completa"
+            style={{ width: 28, height: 28, borderRadius: 6, border: `1px solid ${colors.border}`, background: 'transparent', color: colors.textMid, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >
+            {isFullscreen ? '🔳' : '🔲'}
+          </button>
+
+          {currentUser && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: colors.surface2, padding: '3px 10px', borderRadius: 10, border: `1px solid ${colors.border}` }}>
+              <div style={{ fontSize: 12 }}>👤</div>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <div style={{ fontSize: 11, fontWeight: 900, color: colors.text, lineHeight: 1 }}>{currentUser.nombre.split(' ')[0].toUpperCase()}</div>
+                <div style={{ fontSize: 7, color: colors.orange, fontWeight: 800, fontFamily: 'DM Mono, monospace' }}>{currentUser.rol?.toUpperCase()}</div>
+              </div>
+            </div>
+          )}
+
           {currentUser && currentUser.nivel <= 2 && (
             <button
               onClick={() => { if (typeof window !== 'undefined') window.location.href = '/admin' }}
-              style={{ padding: '5px 12px', borderRadius: 6, border: `1px solid ${colors.blueB}`, background: colors.blueDim, color: colors.blue, fontSize: 11, fontFamily: 'DM Mono, monospace', cursor: 'pointer', letterSpacing: 0.5 }}
+              style={{ padding: '6px 12px', borderRadius: 6, border: `1px solid ${colors.blueB}`, background: colors.blueDim, color: colors.blue, fontSize: 10, fontFamily: 'DM Mono, monospace', cursor: 'pointer', fontWeight: 700 }}
             >
-              ⚙️ ADMIN
+              ADMIN
             </button>
           )}
-          <div
-            onClick={() => { if (currentUser) { setPinNew(''); setPinConfirm(''); setPinError(''); setShowEditPin(true) } }}
-            title="Cambiar PIN"
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 20, background: colors.surface2, border: `1px solid ${colors.border}`, cursor: 'pointer' }}
-          >
-            <div style={{ width: 24, height: 24, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#fff', background: currentUser?.color || colors.orange }}>
-              {currentUser?.nombre[0] || '?'}
-            </div>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: colors.text }}>{currentUser?.nombre || 'Invitado'}</div>
-              <div style={{ fontSize: 9, color: colors.textDim, fontFamily: 'DM Mono, monospace' }}>{currentUser?.rol || 'Sin rol'}</div>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -3057,6 +3974,9 @@ export default function POSRestaurant({ license }: { license: License }) {
       {renderFuncionesModal()}
       {renderAuthOverlay()}
       {renderTasaModal()}
+      {renderSuccessOverlay()}
+      {renderQuickClientModal()}
+      {renderCancelReasonModal()}
 
       <style>{`
         :root[data-theme="dark"] {
@@ -3086,6 +4006,11 @@ export default function POSRestaurant({ license }: { license: License }) {
         .zk-scroll { overflow-y: auto; -webkit-overflow-scrolling: touch; }
         .zk-mesa { transition: transform 0.15s ease, box-shadow 0.15s ease; }
         .zk-mesa:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.35); }
+        @keyframes pulse {
+          0% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(1.2); opacity: 0.7; }
+          100% { transform: scale(1); opacity: 1; }
+        }
         .zk-modal-fade { animation: zkFadeIn 0.16s ease; }
         @keyframes zkFadeIn {
           from { opacity: 0; transform: scale(0.97); }
@@ -3101,6 +4026,13 @@ export default function POSRestaurant({ license }: { license: License }) {
           .zytek-print-area, .zytek-print-area * { visibility: visible; }
           .zytek-print-area { position: absolute; left: 0; top: 0; width: 100%; background: #fff !important; color: #000 !important; border: none !important; }
           .zytek-print-area * { color: #000 !important; background: transparent !important; border-color: #aaa !important; }
+        }
+        @media (max-width: 950px) {
+          .zk-business-name { display: none; }
+          .zk-topbar-widgets { gap: 8px !important; }
+        }
+        @media (max-width: 600px) {
+          .zk-topbar-widgets span { display: none; }
         }
       `}</style>
     </div>
