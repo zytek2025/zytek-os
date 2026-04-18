@@ -4,7 +4,7 @@ import type { Subscription, MenuItem, ZytekUser } from '@/types'
 import { supabase } from '@/lib/supabase.client'
 import bcrypt from 'bcryptjs'
 import { PAIS_CONFIG, type PaisId, readPaisLocal, readTasaLocal, writeTasaLocal } from '@/lib/paises'
-import { WaiterBadge } from './WaiterBadge'
+import { getAvatarColor } from '@/lib/utils/avatar'
 import { ConnectionIndicator } from './ConnectionIndicator'
 
 console.log('💎 POSRestaurant.tsx: File loaded in browser')
@@ -1909,9 +1909,17 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
                             </div>
                           )}
                           {table.mesero && (
-                            <div style={{ position: 'absolute', bottom: 6, left: 6 }}>
-                              <WaiterBadge name={table.mesero} size="sm" />
-                            </div>
+                            <span
+                              title={table.mesero}
+                              style={{
+                                position: 'absolute', bottom: 6, left: 8,
+                                fontSize: 11, fontWeight: 500, fontFamily: 'DM Sans, sans-serif',
+                                color: getAvatarColor(table.mesero),
+                                maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {table.mesero}
+                            </span>
                           )}
                         </div>
                       )}
