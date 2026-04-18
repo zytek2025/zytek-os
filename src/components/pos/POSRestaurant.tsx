@@ -4,6 +4,7 @@ import type { Subscription, MenuItem, ZytekUser } from '@/types'
 import { supabase } from '@/lib/supabase.client'
 import bcrypt from 'bcryptjs'
 import { PAIS_CONFIG, type PaisId, readPaisLocal, readTasaLocal, writeTasaLocal } from '@/lib/paises'
+import { WaiterBadge } from './WaiterBadge'
 
 console.log('💎 POSRestaurant.tsx: File loaded in browser')
 console.log('🌐 Supabase Config:', {
@@ -1794,8 +1795,8 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
                             </div>
                           )}
                           {table.mesero && (
-                            <div style={{ fontSize: 9, fontWeight: 700, color: '#fff', background: 'rgba(0,0,0,0.5)', padding: '2px 6px', borderRadius: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                              👤 {table.mesero}
+                            <div style={{ position: 'absolute', bottom: 6, left: 6 }}>
+                              <WaiterBadge name={table.mesero} size="sm" />
                             </div>
                           )}
                         </div>
