@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase.client'
 import bcrypt from 'bcryptjs'
 import { PAIS_CONFIG, type PaisId, readPaisLocal, readTasaLocal, writeTasaLocal } from '@/lib/paises'
 import { WaiterBadge } from './WaiterBadge'
+import { ConnectionIndicator } from './ConnectionIndicator'
 
 console.log('💎 POSRestaurant.tsx: File loaded in browser')
 console.log('🌐 Supabase Config:', {
@@ -3882,6 +3883,8 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
               <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 13, fontWeight: 700, color: colors.cyan, lineHeight: 1 }}>{tasaBCV.toFixed(2)}</div>
             </div>
           )}
+
+          <ConnectionIndicator />
 
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', borderLeft: `1px solid ${colors.border}`, paddingLeft: 10 }}>
             <div style={{ fontSize: 8, fontFamily: 'DM Mono, monospace', color: colors.textDim }}>{clock.date}</div>
