@@ -1906,14 +1906,14 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
                       )}
                       <div style={{
                         fontFamily: 'Fraunces, serif', fontSize: 42, fontWeight: 900, lineHeight: 1, marginBottom: 4,
-                        color: isOcupada ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.35)',
+                        color: 'rgba(255,255,255,0.95)',
                       }}>
                         {table.numero}
                       </div>
                       <div style={{
                         fontSize: 10, fontFamily: 'DM Mono, monospace',
                         letterSpacing: '0.15em', fontWeight: 700,
-                        color: isOcupada ? statusStyle.text : 'rgba(255,255,255,0.4)',
+                        color: statusStyle.text,
                       }}>
                         {getStatusLabel(table.estado).toUpperCase()}
                       </div>
