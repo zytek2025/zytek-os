@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase.client'
 import bcrypt from 'bcryptjs'
 import { PAIS_CONFIG, type PaisId, readPaisLocal, readTasaLocal, writeTasaLocal } from '@/lib/paises'
 import { getAvatarColor } from '@/lib/utils/avatar'
+import { getOrderIdentifier } from '@/lib/utils/order-display'
 import { ConnectionIndicator } from './ConnectionIndicator'
 
 console.log('💎 POSRestaurant.tsx: File loaded in browser')
@@ -1644,8 +1645,11 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
   const processPayment = async () => {
     if (!selectedTable) return
     
-    // Generar número de orden (correlativo corto para retiro)
-    const orderNum = (Date.now() % 1000).toString().padStart(3, '0')
+    // Identificador para la pantalla de éxito
+    const isDirectSale = selectedTable.id.startsWith('DIRECTA')
+    const displayId = isDirectSale
+      ? `#${String(Date.now() % 100000).padStart(5, '0')}`
+      : `Mesa ${selectedTable.numero}`
     const finalTotal = orderTotal + (orderTotal * 0.1) // Simulación IVA
 
     try {
@@ -1696,7 +1700,7 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
 
       if (error) throw error
 
-      setLastOrderNumber(orderNum)
+      setLastOrderNumber(displayId)
       setLastTotal(finalTotal)
       setShowSuccess(true)
       
@@ -2629,7 +2633,11 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
       setSelectedTable(null)
       setCurrentView('mesas')
       setShowSuccess(true)
-      setLastOrderNumber(orderId.slice(-4).toUpperCase())
+      const isDirectSale2 = selectedTable?.id?.startsWith('DIRECTA')
+      setLastOrderNumber(isDirectSale2
+        ? `#${String(Date.now() % 100000).padStart(5, '0')}`
+        : `Mesa ${selectedTable?.numero || '?'}`
+      )
       setLastTotal(totalUSD)
 
     } catch (err) {
