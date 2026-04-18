@@ -204,6 +204,9 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
   const [authMinNivel, setAuthMinNivel] = useState(2)
   const [authActionLabel, setAuthActionLabel] = useState<string>('')
   const [authError, setAuthError] = useState('')
+  const [pinFailedCount, setPinFailedCount] = useState(0)
+  const [pinBlockedUntil, setPinBlockedUntil] = useState<number | null>(null)
+  const [pinCountdown, setPinCountdown] = useState(0)
   const [alerts, setAlerts] = useState<Array<{ id: string; message: string; sub: string; severity: 'low' | 'medium' | 'high' }>>([])
   const [pendingCancel, setPendingCancel] = useState<{ itemUid: string; delta: number; motivo: string } | null>(null)
   const [showCancelReason, setShowCancelReason] = useState(false)
@@ -526,6 +529,25 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
     return () => clearInterval(iv)
   }, [])
 
+  // PIN lockout countdown
+  useEffect(() => {
+    if (!pinBlockedUntil) { setPinCountdown(0); return }
+    const tick = () => {
+      const remaining = Math.ceil((pinBlockedUntil - Date.now()) / 1000)
+      if (remaining <= 0) {
+        setPinBlockedUntil(null)
+        setPinCountdown(0)
+        setPinFailedCount(0)
+        setAuthError('')
+      } else {
+        setPinCountdown(remaining)
+      }
+    }
+    tick()
+    const iv = setInterval(tick, 1000)
+    return () => clearInterval(iv)
+  }, [pinBlockedUntil])
+
   // Mesas persistence handled in loadPOSData
 
   const getStatusColor = (status: TableStatus) => {
@@ -813,11 +835,19 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
   const handlePinSubmit = async (manualPin?: any) => {
     // Si viene de un evento de React (numpad), ignoramos el parámetro
     const pinToValidate = typeof manualPin === 'string' ? manualPin : pin
-    
+
     if (!pinToValidate) return
+
+    // Check lockout
+    if (pinBlockedUntil && Date.now() < pinBlockedUntil) {
+      setAuthError(`Bloqueado — espera ${pinCountdown}s`)
+      setPin('')
+      return
+    }
+
     setLoading(true)
     setAuthError('')
-    
+
     try {
       console.log(`🔑 Validando PIN: ${pinToValidate.substring(0,2)}**`)
       const { data: dbUsers, error } = await supabase
@@ -835,11 +865,11 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
       let authenticatedUser = null
       for (const u of dbUsers || []) {
         const isMatch = await bcrypt.compare(pinToValidate, u.pin_hash)
-        
+
         // Hardcoded bypass para la demo (IDs específicos de Admin y Mesero)
         const isDemo = (u.id === '00000000-0000-0000-0100-000000000001' && pinToValidate === '1234') ||
                        (u.id === '00000000-0000-0000-0100-000000000002' && pinToValidate === '5678')
-        
+
         if (isMatch || isDemo) {
           console.log(`✅ Acceso concedido: ${u.nombre}`)
           authenticatedUser = u
@@ -848,12 +878,16 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
       }
 
       if (authenticatedUser) {
+        setPinFailedCount(0)
+        setPinBlockedUntil(null)
+        // Reset failed_attempts in DB
+        supabase.from('zytek_users').update({ failed_attempts: 0, blocked_until: null }).eq('id', authenticatedUser.id).then(() => {})
         setPin('')
         // Si por alguna razón no se activó al marcar los dígitos, intentamos aquí también
         if (!document.fullscreenElement) {
           toggleFullScreen();
         }
-        
+
         if (authenticatedUser.nivel === 6) {
           if (typeof window !== 'undefined') window.open('/kds', '_blank')
           return
@@ -862,8 +896,16 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
         if (authenticatedUser.nivel <= 2) setCurrentView('destino')
         else setCurrentView('mesas')
       } else {
-        const hasUsers = dbUsers && dbUsers.length > 0
-        setAuthError(hasUsers ? 'PIN Incorrecto' : 'Error: No hay usuarios activos en la DB')
+        const newCount = pinFailedCount + 1
+        setPinFailedCount(newCount)
+        if (newCount >= 3) {
+          const blockUntil = Date.now() + 30000
+          setPinBlockedUntil(blockUntil)
+          setAuthError(`3 intentos fallidos — bloqueado 30 segundos`)
+        } else {
+          const hasUsers = dbUsers && dbUsers.length > 0
+          setAuthError(hasUsers ? `PIN Incorrecto (${newCount}/3)` : 'Error: No hay usuarios activos en la DB')
+        }
         setPin('')
       }
     } catch (err) {
@@ -892,9 +934,17 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
 
   const confirmAuth = async () => {
     if (!pin) return
+
+    // Check lockout
+    if (pinBlockedUntil && Date.now() < pinBlockedUntil) {
+      setAuthError(`Bloqueado — espera ${pinCountdown}s`)
+      setPin('')
+      return
+    }
+
     setLoading(true)
     setAuthError('')
-    
+
     try {
       const { data: dbUsers, error } = await supabase
         .from('zytek_users')
@@ -913,13 +963,23 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
       }
 
       if (authenticatedUser && authenticatedUser.nivel <= authMinNivel) {
+        setPinFailedCount(0)
+        setPinBlockedUntil(null)
         if (authCallback) authCallback()
         setShowAuthOverlay(false)
         setPin('')
         setAuthCallback(null)
         setAuthError('')
       } else {
-        setAuthError(authenticatedUser ? `Nivel insuficiente (requiere ≤ ${authMinNivel})` : 'PIN inválido')
+        const newCount = pinFailedCount + 1
+        setPinFailedCount(newCount)
+        if (newCount >= 3) {
+          const blockUntil = Date.now() + 30000
+          setPinBlockedUntil(blockUntil)
+          setAuthError(`3 intentos fallidos — bloqueado 30 segundos`)
+        } else {
+          setAuthError(authenticatedUser ? `Nivel insuficiente (requiere ≤ ${authMinNivel})` : `PIN inválido (${newCount}/3)`)
+        }
         setPin('')
       }
     } catch (err) {
@@ -1212,10 +1272,15 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
         {authError && (
           <div style={{ background: colors.redDim, border: `1px solid ${colors.redB}`, borderRadius: 8, padding: '8px 12px', marginBottom: 16, color: colors.red, fontSize: 11, fontFamily: 'DM Mono, monospace' }}>
             {authError}
+            {pinCountdown > 0 && (
+              <div style={{ marginTop: 4, fontSize: 18, fontWeight: 900, color: colors.red }}>
+                {pinCountdown}s
+              </div>
+            )}
           </div>
         )}
-        
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 20, opacity: loading ? 0.6 : 1, pointerEvents: loading ? 'none' : 'auto' }}>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 20, opacity: (loading || pinCountdown > 0) ? 0.3 : 1, pointerEvents: (loading || pinCountdown > 0) ? 'none' : 'auto' }}>
           {[1,2,3,4,5,6,7,8,9].map(n => (
             <button
               key={n}
