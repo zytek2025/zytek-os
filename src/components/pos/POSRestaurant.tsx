@@ -1857,6 +1857,7 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
                 if (table) {
                   const statusStyle = getStatusColor(table.estado)
                   const elapsed = formatElapsed(table.opened)
+                  const isOcupada = table.estado !== 'libre'
                   cells.push(
                     <div
                       key={table.id}
@@ -1867,19 +1868,27 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
                         gridRow: y,
                         position: 'relative',
                         borderRadius: 12, padding: '10px 8px', cursor: 'pointer',
-                        border: `2px solid ${statusStyle.border}`, textAlign: 'center',
+                        border: isOcupada ? `2px solid ${statusStyle.border}` : `0.5px solid rgba(255,255,255,0.06)`,
+                        textAlign: 'center',
                         background: statusStyle.bg, width: '100%', height: '100%',
                         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                        boxShadow: table.estado !== 'libre' ? `0 8px 20px ${statusStyle.border}33` : 'none',
+                        boxShadow: isOcupada ? `0 8px 20px ${statusStyle.border}33` : 'none',
+                        opacity: isOcupada ? 1 : 0.5,
                         transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
                       }}
                     >
                       {elapsed && (() => {
                         const elapsedColor = getElapsedColor(table.opened)
                         return (
-                          <div style={{ position: 'absolute', top: 5, left: 5, fontSize: 9, fontFamily: 'DM Mono, monospace', color: elapsedColor, background: 'rgba(0,0,0,0.6)', padding: '2px 5px', borderRadius: 4, fontWeight: 700 }}>
-                            ⏱ {elapsed}
-                          </div>
+                          <span style={{
+                            position: 'absolute', top: 5, left: 5,
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                            fontSize: 11, fontFamily: 'DM Mono, monospace', color: elapsedColor,
+                            background: 'rgba(255,255,255,0.03)', padding: '2px 6px', borderRadius: 6,
+                          }}>
+                            <span style={{ width: 4, height: 4, borderRadius: '50%', background: elapsedColor, flexShrink: 0 }} />
+                            {elapsed}
+                          </span>
                         )
                       })()}
                       {table.subcuentas && table.subcuentas.length > 1 && (
@@ -1895,13 +1904,20 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
                           ⎇ {table.subcuentas.length}
                         </div>
                       )}
-                      <div style={{ fontFamily: 'Fraunces, serif', fontSize: 42, fontWeight: 900, lineHeight: 1, marginBottom: 4 }}>
+                      <div style={{
+                        fontFamily: 'Fraunces, serif', fontSize: 42, fontWeight: 900, lineHeight: 1, marginBottom: 4,
+                        color: isOcupada ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.35)',
+                      }}>
                         {table.numero}
                       </div>
-                      <div style={{ fontSize: 9, fontFamily: 'DM Mono, monospace', letterSpacing: 1, color: statusStyle.text, fontWeight: 700 }}>
+                      <div style={{
+                        fontSize: 10, fontFamily: 'DM Mono, monospace',
+                        letterSpacing: '0.15em', fontWeight: 700,
+                        color: isOcupada ? statusStyle.text : 'rgba(255,255,255,0.4)',
+                      }}>
                         {getStatusLabel(table.estado).toUpperCase()}
                       </div>
-                      {table.estado !== 'libre' && (() => {
+                      {isOcupada && (() => {
                         const items = table.pedido || []
                         const total = items.reduce((s, i) => s + i.precio * i.cantidad, 0)
                         const count = items.reduce((s, i) => s + i.cantidad, 0)
