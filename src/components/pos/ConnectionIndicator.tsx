@@ -33,10 +33,11 @@ export function ConnectionIndicator() {
       </span>
       {pendingOps > 0 && (
         <span style={{
-          fontSize: 10, fontFamily: 'DM Mono, monospace',
-          color: 'rgba(255,255,255,0.6)',
+          fontSize: 9, fontFamily: 'DM Mono, monospace', fontWeight: 700,
+          color: '#fff', background: '#F09595', borderRadius: 8,
+          padding: '1px 5px', lineHeight: '14px',
         }}>
-          {pendingOps} pend.
+          {pendingOps} pendientes
         </span>
       )}
     </div>
