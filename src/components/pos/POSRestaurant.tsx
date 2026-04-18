@@ -1392,6 +1392,7 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
               type="password"
               value={pin}
               onChange={(e) => setPin(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); confirmAuth() } }}
               placeholder="PIN"
               autoFocus
               style={{ width: '100%', background: 'transparent', border: 'none', fontSize: 24, letterSpacing: 8, color: colors.text, textAlign: 'center', outline: 'none', fontFamily: 'DM Mono, monospace' }}
