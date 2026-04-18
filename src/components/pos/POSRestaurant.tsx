@@ -1847,6 +1847,19 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
                           </div>
                         )
                       })()}
+                      {table.subcuentas && table.subcuentas.length > 1 && (
+                        <div
+                          title={`${table.subcuentas.length} cuentas separadas`}
+                          style={{
+                            position: 'absolute', top: 5, right: 5,
+                            background: 'rgba(175,169,236,0.15)', border: '1px solid rgba(175,169,236,0.4)',
+                            color: '#AFA9EC', borderRadius: 5, padding: '1px 5px',
+                            fontSize: 9, fontWeight: 700, fontFamily: 'DM Mono, monospace',
+                          }}
+                        >
+                          ⎇ {table.subcuentas.length}
+                        </div>
+                      )}
                       <div style={{ fontFamily: 'Fraunces, serif', fontSize: 42, fontWeight: 900, lineHeight: 1, marginBottom: 4 }}>
                         {table.numero}
                       </div>
