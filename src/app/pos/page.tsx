@@ -1,15 +1,26 @@
 'use client'
-import { useState } from 'react'
-import { LicenseGate } from '@/components/shared/LicenseGate'
+
+import { useSubscription } from '@/hooks/useSubscription'
 import POSRestaurant from '@/components/pos/POSRestaurant'
-import type { License } from '@/types'
 
 export default function POSPage() {
-  const [license, setLicense] = useState<License | null>(null)
+  const subscription = useSubscription()
 
-  return (
-    <LicenseGate moduleId="pos" onActivated={setLicense}>
-      {license && <POSRestaurant license={license} />}
-    </LicenseGate>
-  )
+  if (subscription.isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#0a0a0f] text-white">
+        Cargando...
+      </div>
+    )
+  }
+
+  if (!subscription.isActive) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#0a0a0f] text-white">
+        Suscripción no activa
+      </div>
+    )
+  }
+
+  return <POSRestaurant subscription={subscription} />
 }
