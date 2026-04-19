@@ -226,25 +226,60 @@ export interface Lead {
 }
 
 // ── USUARIOS / PERMISOS (Pro) ──────────────────────────────
+// Niveles de acceso (1 = admin, 5 = mesero). Mapea a zytek_users.nivel
+export type UserLevel = 1 | 2 | 3 | 4 | 5
+
+// Registro completo de zytek_users tal como vive en la DB
 export interface Usuario {
   id: string
   tenant_id: string
   nombre: string
-  pin_hash: string      // BCrypt hash
-  rol: 'admin' | 'cajero' | 'mesero' | 'cocina' | 'custom'
+  pin_hash: string
+  nivel: UserLevel
+  rol: string
+  color: string | null
   activo: boolean
-  avatar_color: string
   created_at: string
-  ultimo_login?: string
+  last_login_at: string | null
+  deactivated_at: string | null
+  deactivated_by: string | null
+  failed_attempts: number
+  blocked_until: string | null
 }
 
-export interface Permiso {
-  rol: string
-  modulo: string
-  leer: boolean
-  escribir: boolean
-  eliminar: boolean
+// Datos que viajan desde el UserFormModal al crear/editar
+export interface UsuarioFormData {
+  nombre: string
+  pin?: string           // requerido al crear; opcional al editar
+  pin_confirm?: string   // solo para validación en cliente
+  nivel: UserLevel
+  rol?: string           // si se omite, api.ts deriva rol por nivel
 }
+
+// Filtros del listado (UsersTable)
+export interface UsuarioFilters {
+  search?: string
+  includeInactive?: boolean
+}
+
+// Permiso tal como vive en pos_permissions
+export interface Permiso {
+  id?: string
+  tenant_id?: string
+  slug: string
+  label: string
+  category: string
+  nivel_minimo: UserLevel
+  description?: string | null
+}
+
+// Acciones que se registran en pos_user_audit.action
+export type UsuarioAuditAction =
+  | 'user_created'
+  | 'user_updated'
+  | 'user_deactivated'
+  | 'pin_reset'
+  | 'level_changed'
 
 // ── CONFIGURACIÓN ──────────────────────────────────────────
 export interface TenantConfig {
