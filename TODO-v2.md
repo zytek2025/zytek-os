@@ -80,3 +80,57 @@ Cuando se ejecute A.2, el servicio de cobro va a necesitar leer/actualizar
 Específicamente el A.2 asume `estado`, `cajero_id`, `paid_at`, `propina`,
 `descuento`, `notes`, `numero_comanda`, `mesa_id`. Hay que verificar cada
 uno antes de usarlos.
+
+---
+
+## 4. Deuda técnica de tipos · alineación camelCase / snake_case
+
+`npx tsc --noEmit` reporta 33 errores preexistentes (detectados al arrancar
+A.2.2, 2026-04-19). Ninguno bloquea el cobro, pero hay que limpiarlos antes
+de cerrar el Bloque B.
+
+### Archivos afectados
+
+- `src/components/admin/AdminPanel.tsx` — 5 errores
+- `src/components/pos/POSRestaurant.tsx` — 28 errores
+
+### Patrones de error
+
+1. **camelCase vs snake_case en props de tipos DB**
+   - `SubGrupo.categoriaId` → `categoria_id`
+   - `Modificador.grupoId` → `grupo_id`
+   - `MenuCategory.hasSubgroups` → `has_subgroups`
+   - `MenuItem.forcedModifiers` → `forced_modifiers`
+   - `MetodoPago.active` → `activo`
+
+2. **Propiedades faltantes en tipos DB**
+   - `ModGrupo.min` / `ModGrupo.max` — no existen en el tipo
+   - `MenuItem.categoria_id` — no existe en el tipo
+   - `MenuCategory.image_url` / `MenuItem.image_url` — no existen
+   - `MetodoPago.identificador` / `.moneda` / `.emoji` — no existen
+   - `Table.mesero` — no existe
+   - `Table.grid_x` / `grid_y` / `grid_page` — faltantes en literal
+
+3. **Imports/tipos huérfanos tras el refactor**
+   - `POSRestaurant.tsx:3` — `Subscription` ya no exportado desde `@/types`
+   - `POSRestaurant.tsx:201` — `POSSettings` no encontrado
+   - `POSRestaurant.tsx:202` — `POSSession` no encontrado
+   - `POSRestaurant.tsx:698` — `id_db` no válido en `Table`
+   - `POSRestaurant.tsx:866` — asignar `null` a state `string`
+   - `POSRestaurant.tsx:1032` — prop CSS `zTarget` inválida
+
+### Origen probable
+
+Refactor del commit `3c88e1c refactor(types): alinear Usuario y Permiso con
+schema real`. Los tipos se alinearon al schema real pero los consumidores de
+AdminPanel y POSRestaurant quedaron con nombres viejos.
+
+### Trabajo para la migración futura
+
+1. Actualizar los consumidores a los nombres de propiedad reales (snake_case
+   en la mayoría de los casos, según schema DB).
+2. Definir o re-exportar los tipos faltantes (`Subscription`, `POSSettings`,
+   `POSSession`) o refactorizar sus usos.
+3. Verificar si `Table.mesero`, `MetodoPago.emoji` etc. deben agregarse al
+   tipo o eliminarse del UI.
+4. Tras el fix, `npx tsc --noEmit` debe pasar limpio antes de cerrar B.
