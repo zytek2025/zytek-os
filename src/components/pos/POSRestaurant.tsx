@@ -7,6 +7,9 @@ import { PAIS_CONFIG, type PaisId, readPaisLocal, readTasaLocal, writeTasaLocal 
 import { getAvatarColor } from '@/lib/utils/avatar'
 import { getOrderIdentifier } from '@/lib/utils/order-display'
 import { ConnectionIndicator } from './ConnectionIndicator'
+import { SplitPaymentPanel, type OrderParaCobro } from './cobro/SplitPaymentPanel'
+import { CobroConfirmacionModal } from './cobro/CobroConfirmacionModal'
+import type { CobroResultado } from '@/lib/payment/types'
 
 console.log('💎 POSRestaurant.tsx: File loaded in browser')
 console.log('🌐 Supabase Config:', {
@@ -196,6 +199,9 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
   const [cobroTipPct, setCobroTipPct] = useState(0)
   const [pagoPopup, setPagoPopup] = useState<{ fpagoId: string; esBs: boolean } | null>(null)
   const [pagoInput, setPagoInput] = useState('')
+  // A.2 - cobro end-to-end con FinTrack
+  const [orderParaCobro, setOrderParaCobro] = useState<OrderParaCobro | null>(null)
+  const [cobroResultado, setCobroResultado] = useState<CobroResultado | null>(null)
   const [pin, setPin] = useState('')
   const [currentUser, setCurrentUser] = useState<ZytekUser | null>(null)
   const [posSettings, setPosSettings] = useState<POSSettings | null>(null)
@@ -411,7 +417,8 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
       if (e.key === 'Escape' || e.key === 'Enter') {
         if (e.key === 'Escape') e.preventDefault();
         
-        if (showCobrar) { setShowCobrar(false); return; }
+        // A.2 - Dejar que SplitPaymentPanel maneje su propio Escape/Enter
+        if (showCobrar) { return; }
         if (showTasaModal) { setShowTasaModal(false); return; }
         if (showAuthOverlay) { setShowAuthOverlay(false); return; }
         if (showCorteX) { setShowCorteX(false); return; }
@@ -1222,16 +1229,8 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
         return
       }
 
+      // A.2 - SplitPaymentPanel gestiona sus propios F-keys y Escape. No interceptar aqui.
       if (showCobrar) {
-        if (e.key === 'Escape') { e.preventDefault(); setShowCobrar(false); return }
-        if (isField) return
-        if (e.key === 'Enter') { e.preventDefault(); confirmarCobro(); return }
-        const m = /^F(\d{1,2})$/.exec(e.key)
-        if (m) {
-          const idx = parseInt(m[1], 10) - 1
-          const activas = metodosPago
-          if (idx >= 0 && idx < activas.length) { e.preventDefault(); seleccionarFormaPago(activas[idx]); return }
-        }
         return
       }
 
@@ -1271,7 +1270,12 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
 
       if (currentView === 'comanda') {
         if (e.key === 'F1') { e.preventDefault(); setClienteSearch(''); setNuevoCli({ nombre: '', tel: '', email: '', notas: '' }); setShowCliente(true); return }
-        if (e.key === 'F2') { e.preventDefault(); if (currentOrder.length) requireAuth('cobrar', () => { setCobroPagos([]); setCobroTipPct(0); setShowCobrar(true) }); return }
+        if (e.key === 'F2') {
+          e.preventDefault()
+          if (!currentUser || currentUser.nivel > AUTH_NIVEL_MIN.cobrar) return
+          if (currentOrder.length) abrirCobroNuevo()
+          return
+        }
         if (e.key === 'F5') { e.preventDefault(); repetirUltimoItem(); return }
         if (e.key === 'F6') { e.preventDefault(); setShowNotaConsumo(true); return }
         if (e.key === 'F7') { e.preventDefault(); requireAuth('anularOrden', anularOrden); return }
@@ -1522,10 +1526,16 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
     // 1. Asegurar un UUID válido para la orden. Si la mesa ya tiene uno lo usamos, si no lo creamos.
     const orderId = (selectedTable as any).db_order_id || crypto.randomUUID()
     const itemsToDeliver = selectedTable.pedido.filter(i => !i.enviado)
-    
+
+    // A.2 - calcular totales de la comanda completa (incluye items previamente enviados)
+    const subtotalOrden = selectedTable.pedido.reduce((s, i) => s + i.precio * i.cantidad, 0)
+    const ivaPct = posSettings?.impuestos_activos ? (posSettings?.iva_porcentaje ?? 0) : 0
+    const impuestosOrden = subtotalOrden * (ivaPct / 100)
+    const totalOrden = subtotalOrden + impuestosOrden
+
     try {
       const { idbPut, enqueueSync } = await import('@/lib/idb.client')
-      
+
       // 2. Crear o actualizar la cabecera de la orden primero
       const orderData = {
         id: orderId,
@@ -1533,7 +1543,12 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
         mesa: selectedTable.nombre || selectedTable.numero.toString(),
         status: 'pending',
         waiter_id: currentUser?.id,
-        ts_abierta: selectedTable.opened ? new Date(selectedTable.opened).toISOString() : new Date().toISOString()
+        ts_abierta: selectedTable.opened ? new Date(selectedTable.opened).toISOString() : new Date().toISOString(),
+        subtotal: subtotalOrden,
+        impuestos: impuestosOrden,
+        propinas: 0,
+        descuento_total: 0,
+        total: totalOrden,
       }
 
       await idbPut('pos_orders', orderData)
@@ -1582,6 +1597,9 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
         })
       })
 
+      // A.2 - Fix: regresar a grilla de mesas tras enviar
+      setSelectedTable(null)
+      setCurrentView('mesas')
     } catch (err) {
       console.error('Error enviando a cocina:', err)
       alert('Error crítico al procesar la comanda.')
@@ -2082,7 +2100,9 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
 
     if (nivel <= 5) {
       items.push({ kind: 'key', node: renderRKey('Venta Directa', '🧾', String(n++), iniciarVentaDirecta, 'green') })
-      items.push({ kind: 'key', node: renderRKey('Cobrar Mesa', '💳', String(n++), () => { setCobroPagos([]); setCobroTipPct(0); setPagoPopup(null); setShowCobrar(true) }, 'orange') })
+      if (nivel <= AUTH_NIVEL_MIN.cobrar) {
+        items.push({ kind: 'key', node: renderRKey('Cobrar Mesa', '💳', String(n++), abrirCobroNuevo, 'orange') })
+      }
       items.push({ kind: 'key', node: renderRKey('Funciones Mesas', '⚡', String(n++), () => setShowFunciones(true), 'blue') })
       items.push({ kind: 'key', node: renderRKey('Asignar Cliente', '👤', String(n++), () => setShowCliente(true), 'blue') })
       items.push({ kind: 'sep' })
@@ -2502,13 +2522,15 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
             >
               👨‍🍳 Enviar
             </button>
-            <button
-              onClick={() => { setCobroPagos([]); setCobroTipPct(0); setShowCobrar(true) }}
-              disabled={!currentOrder.length}
-              style={{ flex: 1, padding: '10px 8px', borderRadius: 7, border: 'none', background: currentOrder.length ? colors.green : colors.surface2, color: currentOrder.length ? '#000' : colors.textDim, fontSize: 11, fontWeight: 700, cursor: currentOrder.length ? 'pointer' : 'not-allowed' }}
-            >
-              💳 Cobrar
-            </button>
+            {currentUser && currentUser.nivel <= AUTH_NIVEL_MIN.cobrar && (
+              <button
+                onClick={abrirCobroNuevo}
+                disabled={!currentOrder.length}
+                style={{ flex: 1, padding: '10px 8px', borderRadius: 7, border: 'none', background: currentOrder.length ? colors.green : colors.surface2, color: currentOrder.length ? '#000' : colors.textDim, fontSize: 11, fontWeight: 700, cursor: currentOrder.length ? 'pointer' : 'not-allowed' }}
+              >
+                💳 Cobrar
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -2748,6 +2770,54 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
         </div>
       </div>
     )
+  }
+
+  // A.2 - Flujo de cobro nuevo (FinTrack end-to-end)
+  const abrirCobroNuevo = async () => {
+    if (!currentUser || currentUser.nivel > AUTH_NIVEL_MIN.cobrar) return
+    if (!selectedTable) return
+    const orderId = (selectedTable as any).db_order_id
+    if (!orderId) {
+      alert('Primero envía la comanda a cocina antes de cobrar.')
+      return
+    }
+    const { data, error } = await supabase
+      .from('pos_orders')
+      .select('id, order_number, numero_comanda, mesa, total, propinas, descuento_total, notas, status')
+      .eq('id', orderId)
+      .eq('tenant_id', subscription.tenantId)
+      .single()
+    if (error || !data) {
+      alert('No se pudo leer la comanda: ' + (error?.message ?? 'comanda no encontrada'))
+      return
+    }
+    if (data.status === 'paid') {
+      alert('Esta comanda ya fue cobrada.')
+      return
+    }
+    if (data.status === 'cancelled') {
+      alert('Esta comanda esta anulada.')
+      return
+    }
+    setOrderParaCobro(data as OrderParaCobro)
+    setShowCobrar(true)
+  }
+
+  const handleCobroSuccess = (resultado: CobroResultado) => {
+    setCobroResultado(resultado)
+    setShowCobrar(false)
+  }
+
+  const handleCierreConfirmacion = () => {
+    setCobroResultado(null)
+    setOrderParaCobro(null)
+    // Liberar mesa y volver a grilla
+    if (selectedTable) {
+      const updatedTable: Table = { ...selectedTable, estado: 'libre', pedido: [], monto: undefined }
+      setTables(tables.map(t => t.id === selectedTable.id ? updatedTable : t))
+    }
+    setSelectedTable(null)
+    setCurrentView('mesas')
   }
 
   const renderCobrarModal = () => {
@@ -4118,7 +4188,23 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
         {displayView === 'comanda' && renderComandaView()}
       </div>
 
-      {renderCobrarModal()}
+      {showCobrar && orderParaCobro && currentUser && (
+        <SplitPaymentPanel
+          order={orderParaCobro}
+          tenantId={subscription.tenantId}
+          userId={currentUser.id}
+          userLevel={currentUser.nivel}
+          onClose={() => { setShowCobrar(false); setOrderParaCobro(null) }}
+          onSuccess={handleCobroSuccess}
+        />
+      )}
+      {cobroResultado && (
+        <CobroConfirmacionModal
+          resultado={cobroResultado}
+          mesa={orderParaCobro?.mesa}
+          onClose={handleCierreConfirmacion}
+        />
+      )}
       {renderCorteXModal()}
       {renderCorteZModal()}
       {renderFuncionesMesaModal()}
