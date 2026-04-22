@@ -7,6 +7,7 @@ import { PaymentMethodSelector } from './PaymentMethodSelector'
 import { PaymentLineItem } from './PaymentLineItem'
 import type { FormaPagoSlug, MonedaCodigo } from '@/lib/fintrack/types'
 import type { CobroResultado, PagoLinea } from '@/lib/payment/types'
+import { mapearErrorCobro } from '@/lib/payment/service'
 
 export interface OrderParaCobro {
   id: string
@@ -192,8 +193,8 @@ export function SplitPaymentPanel({
         notas: order.notas ?? undefined,
       })
       onSuccess(resultado)
-    } catch (e: any) {
-      setErrorLocal(e.message ?? 'Error al procesar cobro')
+    } catch (e) {
+      setErrorLocal(mapearErrorCobro(e))
     } finally {
       setProcesando(false)
     }
@@ -224,8 +225,8 @@ export function SplitPaymentPanel({
         reason: razon,
       })
       onClose()
-    } catch (e: any) {
-      setErrorLocal(e.message ?? 'Error al anular')
+    } catch (e) {
+      setErrorLocal(mapearErrorCobro(e))
     } finally {
       setProcesando(false)
     }

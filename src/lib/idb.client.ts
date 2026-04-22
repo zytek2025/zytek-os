@@ -1,12 +1,12 @@
-// ═══════════════════════════════════════════════════════════════
-//  IndexedDB Client — offline-first storage
+// ============================================================
+//  IndexedDB Client - offline-first storage
 //  Mismo esquema que zytek-core.js, pero en TypeScript
 //  Solo se usa en componentes client-side
-// ═══════════════════════════════════════════════════════════════
+// ============================================================
 import type { Venta, Cliente, InvItem, InvMovimiento } from '@/types'
 
 const DB_NAME    = 'zytek_v2'
-const DB_VERSION = 3
+const DB_VERSION = 4
 
 let _db: IDBDatabase | null = null
 
@@ -17,15 +17,17 @@ export async function openIDB(): Promise<IDBDatabase> {
     req.onupgradeneeded = e => {
       const db = (e.target as IDBOpenDBRequest).result
       const stores = [
-        { name: 'transacciones', key: 'id', indices: [{ name: 'turnoId', field: 'turnoId' }, { name: 'ts', field: 'ts' }] },
-        { name: 'sync_queue',    key: 'id', indices: [{ name: 'turnoId', field: 'turnoId' }, { name: 'modulo', field: 'modulo' }] },
-        { name: 'config',        key: 'key' },
-        { name: 'cortes_z',      key: 'id' },
-        { name: 'clientes',      key: 'id', indices: [{ name: 'nombre', field: 'nombre' }] },
-        { name: 'productos',     key: 'id', indices: [{ name: 'cat', field: 'cat' }] },
-        { name: 'inventario',    key: 'id' },
-        { name: 'events',        key: 'id' },
-        { name: 'fintrack_tx',   key: 'id', indices: [{ name: 'tipo', field: 'tipo' }, { name: 'fecha', field: 'fecha' }] },
+        { name: 'transacciones',    key: 'id', indices: [{ name: 'turnoId', field: 'turnoId' }, { name: 'ts', field: 'ts' }] },
+        { name: 'sync_queue',       key: 'id', indices: [{ name: 'turnoId', field: 'turnoId' }, { name: 'modulo', field: 'modulo' }] },
+        { name: 'config',           key: 'key' },
+        { name: 'cortes_z',         key: 'id' },
+        { name: 'clientes',         key: 'id', indices: [{ name: 'nombre', field: 'nombre' }] },
+        { name: 'productos',        key: 'id', indices: [{ name: 'cat', field: 'cat' }] },
+        { name: 'inventario',       key: 'id' },
+        { name: 'events',           key: 'id' },
+        { name: 'fintrack_tx',      key: 'id', indices: [{ name: 'tipo', field: 'tipo' }, { name: 'fecha', field: 'fecha' }] },
+        { name: 'pos_orders',       key: 'id', indices: [{ name: 'tenant_id', field: 'tenant_id' }, { name: 'status', field: 'status' }] },
+        { name: 'pos_order_items',  key: 'id', indices: [{ name: 'order_id', field: 'order_id' }] },
       ]
       for (const s of stores) {
         if (!db.objectStoreNames.contains(s.name)) {
@@ -94,7 +96,7 @@ export async function idbDeleteByIndex(store: string, indexName: string, value: 
   })
 }
 
-// ── Sync queue helpers ────────────────────────────────────────
+// -- Sync queue helpers -------------------------------------------
 export async function enqueueSync(modulo: string, tabla: string, op: 'upsert' | 'delete', data: unknown, turnoId = 'T0') {
   await idbPut('sync_queue', {
     id: `sq${Date.now()}${Math.random().toString(36).slice(2,5)}`,
@@ -103,7 +105,7 @@ export async function enqueueSync(modulo: string, tabla: string, op: 'upsert' | 
   })
 }
 
-// ── Storage persistence ───────────────────────────────────────
+// -- Storage persistence ------------------------------------------
 export async function requestPersist(): Promise<boolean> {
   if (!navigator.storage?.persist) return false
   return navigator.storage.persist()

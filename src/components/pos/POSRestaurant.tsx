@@ -10,6 +10,7 @@ import { ConnectionIndicator } from './ConnectionIndicator'
 import { SplitPaymentPanel, type OrderParaCobro } from './cobro/SplitPaymentPanel'
 import { CobroConfirmacionModal } from './cobro/CobroConfirmacionModal'
 import type { CobroResultado } from '@/lib/payment/types'
+import { mapearErrorCobro } from '@/lib/payment/service'
 
 console.log('💎 POSRestaurant.tsx: File loaded in browser')
 console.log('🌐 Supabase Config:', {
@@ -1600,9 +1601,14 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
       // A.2 - Fix: regresar a grilla de mesas tras enviar
       setSelectedTable(null)
       setCurrentView('mesas')
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error enviando a cocina:', err)
-      alert('Error crítico al procesar la comanda.')
+      const online = typeof navigator !== 'undefined' ? navigator.onLine : true
+      if (!online) {
+        alert('Sin conexion. La comanda se guardo localmente y se enviara a cocina al reconectar.')
+      } else {
+        alert('Error al enviar a cocina: ' + (err?.message ?? 'desconocido') + '\nLa comanda puede haberse guardado localmente; revisa la cola de sync.')
+      }
     }
   }
 
@@ -2786,20 +2792,41 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
       .select('id, order_number, numero_comanda, mesa, total, propinas, descuento_total, notas, status')
       .eq('id', orderId)
       .eq('tenant_id', subscription.tenantId)
-      .single()
-    if (error || !data) {
-      alert('No se pudo leer la comanda: ' + (error?.message ?? 'comanda no encontrada'))
+      .maybeSingle()
+
+    let orderData: OrderParaCobro | null = (data as OrderParaCobro | null) ?? null
+    if (!orderData) {
+      // Fallback IDB: comanda aun no sincronizada con Supabase
+      const { idbGet } = await import('@/lib/idb.client')
+      const local = await idbGet<any>('pos_orders', orderId)
+      if (local && local.tenant_id === subscription.tenantId) {
+        orderData = {
+          id: local.id,
+          order_number: local.order_number ?? 0,
+          numero_comanda: local.numero_comanda ?? null,
+          mesa: local.mesa ?? null,
+          total: local.total ?? 0,
+          propinas: local.propinas ?? null,
+          descuento_total: local.descuento_total ?? null,
+          notas: local.notas ?? null,
+          status: local.status ?? 'pending',
+        }
+      }
+    }
+
+    if (!orderData) {
+      alert(mapearErrorCobro(error ?? new Error('Comanda no encontrada')))
       return
     }
-    if (data.status === 'paid') {
+    if (orderData.status === 'paid') {
       alert('Esta comanda ya fue cobrada.')
       return
     }
-    if (data.status === 'cancelled') {
+    if (orderData.status === 'cancelled') {
       alert('Esta comanda esta anulada.')
       return
     }
-    setOrderParaCobro(data as OrderParaCobro)
+    setOrderParaCobro(orderData)
     setShowCobrar(true)
   }
 

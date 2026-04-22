@@ -134,3 +134,106 @@ AdminPanel y POSRestaurant quedaron con nombres viejos.
 3. Verificar si `Table.mesero`, `MetodoPago.emoji` etc. deben agregarse al
    tipo o eliminarse del UI.
 4. Tras el fix, `npx tsc --noEmit` debe pasar limpio antes de cerrar B.
+
+---
+
+## 5. A.2.8 · Constraint único sobre comandas abiertas por mesa (POSPUESTO)
+
+Originalmente parte de A.2.6. Se sacó porque sin conocer el schema real
+de `pos_orders` y el modelo de mesas divididas, cualquier `UNIQUE` puede
+romper features existentes.
+
+### Objetivo
+
+Una migración que evite que una misma mesa tenga dos comandas abiertas
+simultáneamente (se disparaban race conditions al enviar/cobrar rápido
+y con sync offline de por medio).
+
+### Investigación previa — obligatoria antes de escribir la migración
+
+1. **Dump del schema real de `pos_orders`.** La tabla NO está creada en
+   `supabase/migrations/`. Grep de `create table pos_orders` en el repo:
+   0 matches. Existe en Supabase pero fuera del control de migraciones.
+   Exportar el DDL actual (columnas, tipos, constraints, indices) y, si
+   procede, commit de una migración `create table if not exists` que
+   documente el estado para que futuras migraciones se apoyen en él.
+
+2. **Modelo de mesas divididas (⎇ N).** Grep de
+   `dividir`/`split`/`parent_order`/`mesa_dividida` en `src/`: 0 matches.
+   El badge de la fase 1.5 (`feat(pos): fase 1.5 — badge de mesa dividida`)
+   existe pero el backend no aparece. Necesitamos:
+   - Decidir si dividir genera múltiples `pos_orders` activas para la
+     misma `mesa` o una sola orden con items divididos.
+   - Si son múltiples, el UNIQUE rompe la feature → usar otro predicate
+     (ej. índice funcional sobre una columna `principal`).
+
+3. **Nombre real de la columna.** El código usa `mesa` (text con el
+   nombre/número de mesa, no uuid): ver `POSRestaurant.tsx:717,1543,1703`
+   y `payment/service.ts:51`. El plan original decía `mesa_id uuid` —
+   no existe en el código actual.
+
+4. **Estados a cubrir por el partial index.** El ciclo real es
+   `draft → pending → paid/cancelled`. Un constraint sólo sobre `pending`
+   permite coexistencia de una `draft` + una `pending` para la misma mesa
+   (justo lo que queremos evitar). El predicate correcto es
+   `WHERE status IN ('draft','pending')`.
+
+### Esqueleto tentativo (ajustar tras investigación)
+
+```sql
+-- supabase/migrations/0NN_pos_orders_unique_por_mesa.sql
+create unique index if not exists idx_pos_orders_unique_abierta
+  on pos_orders (tenant_id, mesa)
+  where status in ('draft', 'pending');
+```
+
+### Criterios para cerrar A.2.8
+
+- Schema DDL de `pos_orders` documentado en una migración.
+- Modelo de mesas divididas confirmado (o implementado) con tests.
+- Migración aplicada en staging + smoke test de:
+  (a) abrir mesa A, abrir mesa A otra vez desde otra sesión → debe fallar.
+  (b) dividir mesa → no debe violar la constraint.
+  (c) cobrar comanda → libera la mesa (status='paid') y permite abrir nueva.
+
+### Mientras tanto
+
+La protección defensiva en código (A.2.6) es suficiente en producción:
+write-through IDB + retry + mensajes específicos + fallback. El constraint
+a nivel DB se añade sólo cuando el modelo esté claro.
+
+---
+
+## 6. A.2.7 · Sync route no drena tablas de cobro (BLOQUEANTE para prod)
+
+Descubierto durante A.2.6. El fail-safe offline encola correctamente en
+IndexedDB pero los datos nunca llegan al backend por 3 bugs en
+`src/app/api/sync/route.ts`:
+
+1. **`ALLOWED_TABLES` incompleto** —
+   `['ventas','inventario','clientes','menu_items','turnos']` no incluye
+   `pos_orders`, `pos_order_items`, `pos_audit_trace`.
+   _Impacto:_ todos los cobros offline quedan atrapados en el dispositivo.
+
+2. **Mismatch de nombres de campo** entre lo que escribe `enqueueSync` y
+   lo que espera `syncQueueSchema`:
+   - `enqueueSync` escribe: `{tabla, op, ts}`
+   - `syncQueueSchema` espera: `{table, operation, timestamp}`
+
+3. **Mismatch de body**:
+   - Cliente envía: `{ operations: [...] }`
+   - Route lee: `req.body.items`
+
+### Alcance A.2.7
+
+- Añadir `pos_orders`, `pos_order_items`, `pos_audit_trace` a
+  `ALLOWED_TABLES`.
+- Unificar nomenclatura (decidir cuál es la fuente de verdad).
+- Test E2E: offline → cobrar → online → verificar filas en Supabase.
+- Smoke test de todas las otras tablas offline (`ventas`, `menu_items`)
+  por si el mismo mismatch las afectaba silenciosamente.
+
+### Criticidad
+
+**BLOQUEANTE para deploy a primer cliente.** El flujo offline es requisito
+del modelo Restaurant Lite (kiosko tablet + IndexedDB).
