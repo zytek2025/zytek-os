@@ -4,6 +4,7 @@
 //  Solo se usa en componentes client-side
 // ============================================================
 import type { Venta, Cliente, InvItem, InvMovimiento } from '@/types'
+import { EventBus } from '@/lib/eventbus.client'
 
 const DB_NAME    = 'zytek_v2'
 const DB_VERSION = 4
@@ -103,6 +104,11 @@ export async function enqueueSync(modulo: string, tabla: string, op: 'upsert' | 
     modulo, tabla, op, data, turnoId,
     ts: Date.now(), intentos: 0
   })
+  // Notifica al SyncService (y consumidores UI del badge) que hay trabajo nuevo.
+  // Guardado por typeof window porque idb.client.ts puede importarse desde SSR.
+  if (typeof window !== 'undefined') {
+    try { EventBus.emit('sync.queued', { modulo, tabla, op }) } catch {}
+  }
 }
 
 // -- Storage persistence ------------------------------------------

@@ -306,9 +306,12 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
       return () => clearInterval(checkAlerts)
     })
 
-    // Inicializar SyncService
+    // Inicializar SyncService con cleanup seguro pese al import dinamico async
+    let syncCancelled = false
+    let syncStop: (() => void) | null = null
     import('@/services/sync-service').then(({ SyncService }) => {
-      SyncService.startSyncCycle()
+      if (syncCancelled) return
+      syncStop = SyncService.startSyncCycle()
     })
 
     // Detectar estado offline
@@ -321,6 +324,8 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
       window.removeEventListener('zk:tasa-change', onTasa)
       window.removeEventListener('online', updateOnlineStatus)
       window.removeEventListener('offline', updateOnlineStatus)
+      syncCancelled = true
+      syncStop?.()
     }
   }, [])
 
