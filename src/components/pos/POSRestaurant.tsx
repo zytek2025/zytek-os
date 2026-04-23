@@ -55,8 +55,8 @@ interface MetodoPago {
 
 type AuthAction =
   | 'abrirMesa' | 'anularPlato' | 'anularOrden' | 'descuento' | 'abrirCredito'
-  | 'registrarAbono' | 'cobrar' | 'enviarCocina' | 'corteZ' | 'corteX'
-  | 'actualizarTasa'
+  | 'registrarAbono' | 'cobrar' | 'ventaDirecta' | 'enviarCocina'
+  | 'corteZ' | 'corteX' | 'actualizarTasa'
 
 const AUTH_NIVEL_MIN: Record<AuthAction, number> = {
   abrirMesa: 5,
@@ -68,6 +68,7 @@ const AUTH_NIVEL_MIN: Record<AuthAction, number> = {
   actualizarTasa: 3,
   registrarAbono: 4,
   cobrar: 4,
+  ventaDirecta: 4,
   corteX: 4,
   enviarCocina: 5,
 }
@@ -230,6 +231,15 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
 
   // ── Venta Directa ──
   const iniciarVentaDirecta = () => {
+    // Defensa en profundidad: protege contra triggers por atajo de teclado
+    // o URL directa. El render del sidebar ya filtra por nivel, pero si el
+    // handler se dispara fuera de ese render igual debe validarse.
+    const nivel = currentUser?.nivel ?? 6
+    if (nivel > AUTH_NIVEL_MIN.ventaDirecta) {
+      console.warn('[VentaDirecta] nivel insuficiente:', nivel)
+      alert('No tienes permisos para iniciar Venta Directa.')
+      return
+    }
     setQuickClientData({ idFiscal: '', nombre: '', whatsapp: '', direccion: '' })
     setShowQuickClientModal(true)
   }
@@ -2110,7 +2120,9 @@ export default function POSRestaurant({ subscription }: { subscription: Subscrip
     let n = 1
 
     if (nivel <= 5) {
-      items.push({ kind: 'key', node: renderRKey('Venta Directa', '🧾', String(n++), iniciarVentaDirecta, 'green') })
+      if (nivel <= AUTH_NIVEL_MIN.ventaDirecta) {
+        items.push({ kind: 'key', node: renderRKey('Venta Directa', '🧾', String(n++), iniciarVentaDirecta, 'green') })
+      }
       if (nivel <= AUTH_NIVEL_MIN.cobrar) {
         items.push({ kind: 'key', node: renderRKey('Cobrar Mesa', '💳', String(n++), abrirCobroNuevo, 'orange') })
       }
