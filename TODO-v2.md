@@ -237,3 +237,47 @@ IndexedDB pero los datos nunca llegan al backend por 3 bugs en
 
 **BLOQUEANTE para deploy a primer cliente.** El flujo offline es requisito
 del modelo Restaurant Lite (kiosko tablet + IndexedDB).
+
+---
+
+## 7. Cobro legacy · pos_payments con nombres de columna desactualizados
+
+Descubierto al alinear el sync route en A.2.7.
+
+El bloque `POSRestaurant.tsx:2640-2651` (flujo de cobro pre-A.2) encola
+inserts a `pos_payments` con columnas en inglés/antiguas que el resto del
+proyecto ya no usa:
+
+| Columna usada | Real esperada |
+|---|---|
+| `metodo` | `forma_pago` |
+| `monto_usd` | `monto` |
+| `monto_local` | `monto_bs` |
+| `tasa_cambio` | ¿`moneda_codigo` + tasa FinTrack? |
+
+El nuevo flujo de cobro (`PaymentService`) NO usa `pos_payments`: registra
+movimientos en `fintrack_movimientos`. Por eso el path legacy es redundante.
+
+### Comportamiento actual tras A.2.7
+
+- `ALLOWED_TABLES` sí incluye `pos_payments` (para no romper el path en caso
+  de que algún cliente viejo lo dispare).
+- `ALLOWED_FIELDS` NO incluye las columnas legacy (`metodo`, `monto_usd`,
+  `monto_local`, `tasa_cambio`). `sanitizeData` las descarta en silencio,
+  por lo que el row terminaría escribiéndose con valores nulos para esos
+  campos (o el insert podría fallar por NOT NULL constraints).
+
+### Opciones de resolución
+
+- **(a) Recomendado** — eliminar el bloque legacy de `POSRestaurant.tsx`
+  (líneas 2640-2658) si ya no se invoca desde ningún flujo activo. El
+  nuevo cobro A.2 hace lo mismo vía `PaymentService`.
+- **(b)** Ampliar `ALLOWED_FIELDS` con los nombres legacy — mantiene el path
+  vivo pero perpetúa la deuda técnica.
+- **(c)** Migrar el call site al `PaymentService` — esfuerzo medio, cierra
+  la deuda.
+
+### Prioridad
+
+**Baja** · no bloqueante. El cobro en producción va por el path A.2 nuevo.
+Cerrar junto con la limpieza del POS (fase de consolidación post-MVP).

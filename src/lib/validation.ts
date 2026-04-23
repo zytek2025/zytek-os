@@ -119,15 +119,26 @@ export const corteZSchema = z.object({
   checksum: z.string().max(100).optional(),
 })
 
+// Schema alineado con el productor real (src/lib/idb.client.ts enqueueSync).
+// Cliente escribe: {id, modulo, tabla, op, data, turnoId, ts, intentos}.
+// El servidor (src/app/api/sync/route.ts) respeta el id del cliente para
+// que useSyncQueue.flush pueda borrar el registro local tras confirmacion.
 export const syncItemSchema = z.object({
-  table: z.enum(['ventas', 'inventario', 'clientes', 'menu_items', 'turnos']),
-  operation: z.enum(['insert', 'update', 'delete']),
+  id: z.string().min(1).max(100),
+  modulo: z.string().min(1).max(50),
+  tabla: z.enum([
+    'ventas', 'inventario', 'clientes', 'menu_items', 'turnos',
+    'pos_orders', 'pos_order_items', 'pos_payments', 'pos_audit_trace',
+  ]),
+  op: z.enum(['upsert', 'delete']),
   data: z.record(z.any()),
-  timestamp: z.number().int(),
+  turnoId: z.string().max(50).optional(),
+  ts: z.number().int().optional(),
+  intentos: z.number().int().optional(),
 })
 
 export const syncQueueSchema = z.object({
-  items: z.array(syncItemSchema).min(1).max(100),
+  operations: z.array(syncItemSchema).min(1).max(100),
 })
 
 export const reportesQuerySchema = z.object({
